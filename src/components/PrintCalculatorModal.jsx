@@ -4,12 +4,9 @@ import {
   X,
   Plus,
   Minus,
-  Check,
-  Sparkles,
   FileText,
   Copy,
   Droplets,
-  Layers,
   ArrowRight
 } from 'lucide-react';
 import { printService } from '../services/printService';
@@ -48,29 +45,25 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
     }
   };
 
-  // Encontrar tarifa correspondiente
+  // Encontrar tarifa correspondiente según la tabla solicitada
   const currentRate = rates.find(
     (r) => r.service_type === serviceType && r.paper_type === paperType
   ) || {
-    sale_price: serviceType.includes('color') ? 5.0 : 2.0,
-    cost_price: serviceType.includes('color') ? 1.5 : 0.5,
+    sale_price: serviceType.includes('color') ? (paperType === 'legal' ? 10.0 : 8.0) : (paperType === 'legal' ? 5.0 : 4.0),
+    cost_price: 1.0,
     estimated_ink_ml: serviceType.includes('color') ? 0.15 : 0.05
   };
 
-  // Precio unitario efectivo
   const effectiveUnitPrice = customUnitPrice !== ''
     ? parseFloat(customUnitPrice) || 0
     : currentRate.sale_price;
 
-  // Hojas físicas utilizadas (si es doble faz, 2 páginas = 1 hoja)
   const sheetsUsed = isDuplex ? Math.ceil(pagesCount / 2) : pagesCount;
 
-  // Tinta estimada en ml
   const estimatedInkUsed = Number(
-    (pagesCount * (currentRate.estimated_ink_ml || 0.05)).toFixed(3)
+    (pagesCount * (currentRate.estimated_ink_ml || 0.05)).toFixed(2)
   );
 
-  // Subtotal
   const subtotal = pagesCount * effectiveUnitPrice;
 
   const handleAdd = () => {
@@ -88,7 +81,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
         ? 'Copia B/N'
         : 'Copia Color';
 
-    const paperLabel = paperType === 'carta' ? 'Carta' : 'Legal/Oficio';
+    const paperLabel = paperType === 'carta' ? 'Carta' : 'Legal';
     const duplexLabel = isDuplex ? ' (Doble Faz)' : '';
 
     const printItem = {
@@ -104,7 +97,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
       ink_used_estimate: estimatedInkUsed,
       cost_price: currentRate.cost_price,
       sale_price: effectiveUnitPrice,
-      quantity: 1, // 1 trabajo con subtotal
+      quantity: 1,
       total_price: subtotal
     };
 
@@ -116,99 +109,99 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 animate-fade-in">
+      <div className="bg-white rounded-3xl w-full max-w-sm sm:max-w-md shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-blue-900 text-white">
+        <div className="flex items-center justify-between px-5 py-3.5 bg-blue-900 text-white shrink-0">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-blue-800 text-white rounded-xl">
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base">Cobrar Impresión / Copia</h3>
-              <p className="text-[11px] text-blue-200">Calculadora Rápida para Móvil</p>
+              <h3 className="font-bold text-sm sm:text-base leading-tight">Cobrar Impresión / Copia</h3>
+              <p className="text-[10px] text-blue-200">Calculadora Rápida para Móvil</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-blue-200 hover:text-white rounded-lg transition"
+            className="p-1.5 text-blue-200 hover:text-white rounded-lg transition"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Formulario Táctil */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+        {/* Formulario */}
+        <div className="p-4 overflow-y-auto space-y-3.5 flex-1 max-w-full">
           {/* 1. Tipo de Servicio */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+            <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
               1. Tipo de Servicio
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setServiceType('print_bn')}
-                className={`p-3 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2.5 ${
+                className={`p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2 ${
                   serviceType === 'print_bn'
-                    ? 'bg-blue-900 text-white border-blue-900 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
                 }`}
               >
                 <FileText className="w-4 h-4 shrink-0" />
-                <span className="font-bold text-xs">Impresión B/N</span>
+                <span className="font-bold text-xs">🖤 Impresión B/N</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setServiceType('print_color')}
-                className={`p-3 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2.5 ${
+                className={`p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2 ${
                   serviceType === 'print_color'
-                    ? 'bg-blue-900 text-white border-blue-900 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
                 }`}
               >
                 <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span className="font-bold text-xs">Impresión Color</span>
+                <span className="font-bold text-xs">🌈 Impresión Color</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setServiceType('copy_bn')}
-                className={`p-3 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2.5 ${
+                className={`p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2 ${
                   serviceType === 'copy_bn'
-                    ? 'bg-blue-900 text-white border-blue-900 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
                 }`}
               >
                 <Copy className="w-4 h-4 shrink-0" />
-                <span className="font-bold text-xs">Copia B/N</span>
+                <span className="font-bold text-xs">📄 Copia B/N</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setServiceType('copy_color')}
-                className={`p-3 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2.5 ${
+                className={`p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center gap-2 ${
                   serviceType === 'copy_color'
-                    ? 'bg-blue-900 text-white border-blue-900 shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
                 }`}
               >
                 <Droplets className="w-4 h-4 text-purple-400 shrink-0" />
-                <span className="font-bold text-xs">Copia Color</span>
+                <span className="font-bold text-xs">🌈 Copia Color</span>
               </button>
             </div>
           </div>
 
           {/* 2. Tamaño de Papel & Doble Faz */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+            <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
               2. Tamaño de Papel
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               <button
                 type="button"
                 onClick={() => setPaperType('carta')}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1 ${
+                className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
                   paperType === 'carta'
                     ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-slate-50 border-slate-200 text-slate-700'
@@ -220,7 +213,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
               <button
                 type="button"
                 onClick={() => setPaperType('legal')}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1 ${
+                className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
                   paperType === 'legal'
                     ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-slate-50 border-slate-200 text-slate-700'
@@ -232,7 +225,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
               <button
                 type="button"
                 onClick={() => setIsDuplex(!isDuplex)}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1 ${
+                className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
                   isDuplex
                     ? 'bg-emerald-600 text-white border-emerald-600'
                     : 'bg-slate-50 border-slate-200 text-slate-700'
@@ -243,24 +236,25 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
             </div>
           </div>
 
-          {/* 3. Cantidad de Páginas (Teclado Táctil Rápido) */}
-          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
+          {/* 3. Cantidad de Páginas (Ajustado para que NUNCA sobresalga en móvil) */}
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2 max-w-full overflow-hidden">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800">
                 Cantidad de Páginas
               </label>
-              <span className="text-[11px] text-blue-700 font-semibold">
+              <span className="text-xs text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
                 Tarifa: {formatCurrency(effectiveUnitPrice)} c/u
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Selector Numérico Compacto y Responsive con Grid */}
+            <div className="grid grid-cols-[2.75rem_1fr_2.75rem] gap-2 items-center w-full">
               <button
                 type="button"
                 onClick={() => setPagesCount(Math.max(1, pagesCount - 1))}
-                className="w-12 h-12 bg-white border border-slate-300 rounded-xl font-black text-xl text-slate-700 flex items-center justify-center active:scale-95 shadow-xs"
+                className="h-11 w-full bg-white border border-slate-300 rounded-xl font-black text-xl text-slate-700 flex items-center justify-center active:scale-95 shadow-xs"
               >
-                <Minus className="w-5 h-5" />
+                <Minus className="w-4 h-4" />
               </button>
 
               <input
@@ -268,26 +262,26 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
                 min="1"
                 value={pagesCount}
                 onChange={(e) => setPagesCount(Math.max(1, parseInt(e.target.value) || 1))}
-                className="flex-1 h-12 text-center bg-white border border-slate-300 rounded-xl text-2xl font-black text-slate-900 focus:outline-none focus:border-blue-600 shadow-xs"
+                className="h-11 w-full min-w-0 text-center bg-white border border-slate-300 rounded-xl text-xl font-black text-slate-900 focus:outline-none focus:border-blue-600 shadow-xs px-1"
               />
 
               <button
                 type="button"
                 onClick={() => setPagesCount(pagesCount + 1)}
-                className="w-12 h-12 bg-white border border-slate-300 rounded-xl font-black text-xl text-slate-700 flex items-center justify-center active:scale-95 shadow-xs"
+                className="h-11 w-full bg-white border border-slate-300 rounded-xl font-black text-xl text-slate-700 flex items-center justify-center active:scale-95 shadow-xs"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
               </button>
             </div>
 
             {/* Atajos Rápidos */}
-            <div className="flex gap-1.5 pt-1">
+            <div className="grid grid-cols-4 gap-1.5 pt-0.5">
               {[5, 10, 20, 50].map((num) => (
                 <button
                   key={num}
                   type="button"
                   onClick={() => setPagesCount(num)}
-                  className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-blue-50 text-slate-700 hover:text-blue-900 text-xs font-bold rounded-lg shadow-xs transition"
+                  className="py-1.5 bg-white border border-slate-200 hover:bg-blue-50 text-slate-700 hover:text-blue-900 text-xs font-bold rounded-lg shadow-xs transition active:scale-95"
                 >
                   +{num}
                 </button>
@@ -296,16 +290,16 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
           </div>
 
           {/* 4. Resumen de Insumos Automático */}
-          <div className="grid grid-cols-2 gap-2 text-xs p-3 bg-blue-50/70 border border-blue-100 rounded-2xl">
+          <div className="grid grid-cols-2 gap-2 text-xs p-2.5 bg-blue-50/70 border border-blue-100 rounded-2xl">
             <div>
-              <span className="text-slate-500 block">Hojas de Papel:</span>
-              <strong className="text-slate-900 text-sm">
+              <span className="text-slate-500 text-[11px] block">Hojas de Papel:</span>
+              <strong className="text-slate-900 text-xs">
                 {sheetsUsed} hoja{sheetsUsed > 1 ? 's' : ''} ({paperType.toUpperCase()})
               </strong>
             </div>
             <div>
-              <span className="text-slate-500 block">Tinta Estimada:</span>
-              <strong className="text-blue-900 text-sm">
+              <span className="text-slate-500 text-[11px] block">Tinta Estimada:</span>
+              <strong className="text-blue-900 text-xs">
                 ~{estimatedInkUsed} ml
               </strong>
             </div>
@@ -313,12 +307,12 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
         </div>
 
         {/* Footer con Total y Botón Agregar */}
-        <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-3">
+        <div className="p-3.5 bg-white border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">
-              Subtotal a Facturar
+            <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">
+              Subtotal
             </span>
-            <span className="text-2xl font-black text-blue-900">
+            <span className="text-xl sm:text-2xl font-black text-blue-900">
               {formatCurrency(subtotal)}
             </span>
           </div>
@@ -326,7 +320,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
           <button
             type="button"
             onClick={handleAdd}
-            className="flex-1 max-w-[220px] py-3.5 px-4 bg-blue-700 hover:bg-blue-800 active:scale-95 text-white font-bold rounded-2xl text-sm shadow-lg shadow-blue-700/25 flex items-center justify-center gap-2 transition"
+            className="flex-1 py-3 px-3.5 bg-blue-700 hover:bg-blue-800 active:scale-95 text-white font-bold rounded-2xl text-xs sm:text-sm shadow-md shadow-blue-700/25 flex items-center justify-center gap-1.5 transition"
           >
             <span>Agregar a Factura</span>
             <ArrowRight className="w-4 h-4" />

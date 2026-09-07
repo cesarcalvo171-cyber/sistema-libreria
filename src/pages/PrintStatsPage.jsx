@@ -329,7 +329,7 @@ export const PrintStatsPage = () => {
                     <div className="flex items-center gap-2">
                       <div>
                         <label className="text-[10px] font-bold text-slate-500 block">
-                          Costo ($)
+                          Costo (C$)
                         </label>
                         <input
                           type="number"
@@ -343,7 +343,7 @@ export const PrintStatsPage = () => {
 
                       <div>
                         <label className="text-[10px] font-bold text-blue-700 block">
-                          Venta ($)
+                          Venta (C$)
                         </label>
                         <input
                           type="number"

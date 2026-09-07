@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase';
 export const productsService = {
   // Obtener todos los productos activos
   async getAll() {
+    // Asegurar que existan los productos de papel base si está vacío o recién conectado
+    await this.ensurePaperProductsExist();
+
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -11,6 +14,51 @@ export const productsService = {
 
     if (error) throw error;
     return data || [];
+  },
+
+  // Asegurar productos base de papel (Carta y Legal)
+  async ensurePaperProductsExist() {
+    try {
+      const { data } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('is_active', true);
+
+      const hasCarta = (data || []).some(p => p.name.toLowerCase().includes('carta'));
+      const hasLegal = (data || []).some(p => p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'));
+
+      if (!hasCarta) {
+        await supabase.from('products').insert([
+          {
+            name: 'Hojas de Papel Carta',
+            description: 'Papel bond carta (consumo de impresiones, copias y menudeo)',
+            cost_price: 0.50,
+            sale_price: 1.00,
+            stock: 500,
+            min_stock: 50,
+            units_deducted_per_sale: 1,
+            is_active: true
+          }
+        ]);
+      }
+
+      if (!hasLegal) {
+        await supabase.from('products').insert([
+          {
+            name: 'Hojas de Papel Legal',
+            description: 'Papel bond legal/oficio (consumo de impresiones, copias y menudeo)',
+            cost_price: 0.60,
+            sale_price: 1.50,
+            stock: 300,
+            min_stock: 30,
+            units_deducted_per_sale: 1,
+            is_active: true
+          }
+        ]);
+      }
+    } catch (e) {
+      console.warn('No se pudo verificar productos base de papel:', e);
+    }
   },
 
   // Obtener un producto por ID
@@ -27,6 +75,8 @@ export const productsService = {
 
   // Crear producto nuevo
   async create(productData) {
+    const unitsDeducted = Math.max(1, parseInt(productData.units_deducted_per_sale, 10) || 1);
+
     const { data, error } = await supabase
       .from('products')
       .insert([
@@ -37,6 +87,8 @@ export const productsService = {
           sale_price: Number(productData.sale_price) || 0,
           stock: parseInt(productData.stock, 10) || 0,
           min_stock: parseInt(productData.min_stock, 10) || 5,
+          units_deducted_per_sale: unitsDeducted,
+          deduct_from_product_id: productData.deduct_from_product_id || null,
           is_active: true
         }
       ])
@@ -64,6 +116,8 @@ export const productsService = {
 
   // Actualizar producto
   async update(id, productData) {
+    const unitsDeducted = Math.max(1, parseInt(productData.units_deducted_per_sale, 10) || 1);
+
     const { data, error } = await supabase
       .from('products')
       .update({
@@ -72,6 +126,8 @@ export const productsService = {
         cost_price: Number(productData.cost_price) || 0,
         sale_price: Number(productData.sale_price) || 0,
         min_stock: parseInt(productData.min_stock, 10) || 5,
+        units_deducted_per_sale: unitsDeducted,
+        deduct_from_product_id: productData.deduct_from_product_id || null,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -84,7 +140,6 @@ export const productsService = {
 
   // Ajustar stock (entrada de mercadería o corrección)
   async adjustStock(productId, quantityChange, type = 'restock', note = 'Ajuste de inventario') {
-    // Intentar primero con la función RPC de Supabase
     try {
       const { data, error } = await supabase.rpc('adjust_product_stock', {
         p_product_id: productId,
@@ -97,10 +152,10 @@ export const productsService = {
         return data;
       }
     } catch (e) {
-      console.warn('RPC adjust_product_stock fallo o no existe, usando fallback directo:', e);
+      console.warn('RPC adjust_product_stock fallo, usando fallback directo:', e);
     }
 
-    // Fallback directo si la función RPC aún no está creada
+    // Fallback directo
     const current = await this.getById(productId);
     const newStock = (current.stock || 0) + Number(quantityChange);
     if (newStock < 0) {

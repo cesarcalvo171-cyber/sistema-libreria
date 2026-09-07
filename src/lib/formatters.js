@@ -1,5 +1,5 @@
-// Helper para formatear moneda
-export const formatCurrency = (amount, symbol = '$') => {
+// Helper para formatear moneda (Por defecto C$ Córdobas)
+export const formatCurrency = (amount, symbol = 'C$') => {
   const num = Number(amount) || 0;
   return `${symbol} ${num.toLocaleString('es-NI', {
     minimumFractionDigits: 2,

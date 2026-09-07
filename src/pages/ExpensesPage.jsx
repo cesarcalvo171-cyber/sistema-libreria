@@ -317,7 +317,7 @@ export const ExpensesPage = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Monto ($) *
+                    Monto (C$) *
                   </label>
                   <input
                     type="number"

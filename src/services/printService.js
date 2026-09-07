@@ -1,41 +1,73 @@
 import { supabase } from '../lib/supabase';
 
-// Tarifas por defecto si Supabase aún no tiene la tabla o no está conectada
+// Tarifas Oficiales en Córdobas (C$)
 export const defaultPrintRates = [
-  { id: '1', service_type: 'print_bn', paper_type: 'carta', name: 'Impresión B/N Carta', sale_price: 2.00, cost_price: 0.50, estimated_ink_ml: 0.050 },
-  { id: '2', service_type: 'print_bn', paper_type: 'legal', name: 'Impresión B/N Legal / Oficio', sale_price: 3.00, cost_price: 0.75, estimated_ink_ml: 0.060 },
-  { id: '3', service_type: 'print_color', paper_type: 'carta', name: 'Impresión Color Carta', sale_price: 5.00, cost_price: 1.50, estimated_ink_ml: 0.150 },
-  { id: '4', service_type: 'print_color', paper_type: 'legal', name: 'Impresión Color Legal / Oficio', sale_price: 7.00, cost_price: 2.00, estimated_ink_ml: 0.180 },
-  { id: '5', service_type: 'copy_bn', paper_type: 'carta', name: 'Copia B/N Carta', sale_price: 1.00, cost_price: 0.30, estimated_ink_ml: 0.040 },
-  { id: '6', service_type: 'copy_bn', paper_type: 'legal', name: 'Copia B/N Legal / Oficio', sale_price: 1.50, cost_price: 0.50, estimated_ink_ml: 0.050 },
-  { id: '7', service_type: 'copy_color', paper_type: 'carta', name: 'Copia Color Carta', sale_price: 4.00, cost_price: 1.20, estimated_ink_ml: 0.120 },
-  { id: '8', service_type: 'copy_color', paper_type: 'legal', name: 'Copia Color Legal / Oficio', sale_price: 5.00, cost_price: 1.50, estimated_ink_ml: 0.150 }
+  { service_type: 'print_bn', paper_type: 'carta', name: 'Impresión B/N Carta', sale_price: 4.00, cost_price: 1.00, estimated_ink_ml: 0.050 },
+  { service_type: 'print_bn', paper_type: 'legal', name: 'Impresión B/N Legal', sale_price: 5.00, cost_price: 1.25, estimated_ink_ml: 0.060 },
+  { service_type: 'print_color', paper_type: 'carta', name: 'Impresión Color Carta', sale_price: 8.00, cost_price: 2.50, estimated_ink_ml: 0.150 },
+  { service_type: 'print_color', paper_type: 'legal', name: 'Impresión Color Legal', sale_price: 10.00, cost_price: 3.00, estimated_ink_ml: 0.180 },
+  { service_type: 'copy_bn', paper_type: 'carta', name: 'Copia B/N Carta', sale_price: 4.00, cost_price: 0.80, estimated_ink_ml: 0.040 },
+  { service_type: 'copy_bn', paper_type: 'legal', name: 'Copia B/N Legal', sale_price: 5.00, cost_price: 1.00, estimated_ink_ml: 0.050 },
+  { service_type: 'copy_color', paper_type: 'carta', name: 'Copia Color Carta', sale_price: 8.00, cost_price: 2.50, estimated_ink_ml: 0.120 },
+  { service_type: 'copy_color', paper_type: 'legal', name: 'Copia Color Legal', sale_price: 10.00, cost_price: 3.00, estimated_ink_ml: 0.150 }
 ];
 
 export const printService = {
   // Obtener tarifas configuradas
   async getRates() {
     try {
+      // Limpiar caché local obsoleta
+      localStorage.removeItem('POS_PRINT_RATES');
+
       const { data, error } = await supabase
         .from('print_rates')
         .select('*')
         .order('name', { ascending: true });
 
-      if (error || !data || data.length === 0) {
-        // Fallback a localStorage o default
-        const local = localStorage.getItem('POS_PRINT_RATES');
-        if (local) return JSON.parse(local);
-        return defaultPrintRates;
+      if (!error && data && data.length > 0) {
+        // Verificar si la base de datos tiene precios viejos (ej. 2.00 para B/N) y sincronizarlos automáticamente
+        const bnCarta = data.find(r => r.service_type === 'print_bn' && r.paper_type === 'carta');
+        if (bnCarta && Number(bnCarta.sale_price) < 4.00) {
+          await this.syncOfficialRates(data);
+          // Recargar tras actualizar
+          const { data: updatedData } = await supabase.from('print_rates').select('*').order('name', { ascending: true });
+          if (updatedData) return updatedData;
+        }
+        return data;
       }
-      return data;
+
+      return defaultPrintRates;
     } catch (e) {
-      const local = localStorage.getItem('POS_PRINT_RATES');
-      if (local) return JSON.parse(local);
+      console.warn('Error al obtener tarifas:', e);
       return defaultPrintRates;
     }
   },
 
-  // Guardar / Actualizar tarifa
+  // Sincronizar / Actualizar la base de datos con las tarifas oficiales
+  async syncOfficialRates(existingData = []) {
+    try {
+      for (const def of defaultPrintRates) {
+        const found = existingData.find(e => e.service_type === def.service_type && e.paper_type === def.paper_type);
+        if (found) {
+          await supabase
+            .from('print_rates')
+            .update({
+              sale_price: def.sale_price,
+              cost_price: def.cost_price,
+              name: def.name,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', found.id);
+        } else {
+          await supabase.from('print_rates').insert([def]);
+        }
+      }
+    } catch (e) {
+      console.warn('Error durante sincronización de tarifas:', e);
+    }
+  },
+
+  // Guardar / Actualizar tarifa individual
   async updateRate(id, rateData) {
     try {
       const { data, error } = await supabase
@@ -53,10 +85,6 @@ export const printService = {
       if (error) throw error;
       return data;
     } catch (e) {
-      // Fallback a localStorage
-      const currentRates = await this.getRates();
-      const updated = currentRates.map(r => r.id === id ? { ...r, ...rateData } : r);
-      localStorage.setItem('POS_PRINT_RATES', JSON.stringify(updated));
       return { ...rateData, id };
     }
   },
@@ -86,7 +114,7 @@ export const printService = {
     }
   },
 
-  // Obtener resumen y métricas de consumo de una fecha específica (ej. '2026-09-04')
+  // Obtener resumen y métricas de consumo de una fecha específica
   async getDailySummary(dateString) {
     const selectedDate = dateString || new Date().toISOString().split('T')[0];
     const startISO = `${selectedDate}T00:00:00.000Z`;
@@ -108,14 +136,13 @@ export const printService = {
       console.warn('Error al consultar print_logs:', e);
     }
 
-    // Calcular las 7 métricas solicitadas
-    let totalBnPrints = 0;       // Total impresiones B/N
-    let totalColorPrints = 0;    // Total impresiones color
-    let totalCopies = 0;         // Copias (B/N + Color)
-    let cartaSheetsUsed = 0;     // Hojas carta utilizadas
-    let legalSheetsUsed = 0;     // Hojas legal utilizadas
-    let inkConsumedMl = 0;       // Tinta consumida estimada en ml
-    let dailyRevenue = 0;        // Ingresos diarios por impresiones
+    let totalBnPrints = 0;
+    let totalColorPrints = 0;
+    let totalCopies = 0;
+    let cartaSheetsUsed = 0;
+    let legalSheetsUsed = 0;
+    let inkConsumedMl = 0;
+    let dailyRevenue = 0;
     let dailyCost = 0;
 
     logs.forEach(log => {
@@ -129,14 +156,12 @@ export const printService = {
       dailyCost += cost;
       inkConsumedMl += ink;
 
-      // Hojas según tipo de papel
       if (log.paper_type === 'carta') {
         cartaSheetsUsed += sheets;
       } else if (log.paper_type === 'legal') {
         legalSheetsUsed += sheets;
       }
 
-      // Conteo por tipo de servicio
       if (log.service_type === 'print_bn') {
         totalBnPrints += pages;
       } else if (log.service_type === 'print_color') {
@@ -149,13 +174,13 @@ export const printService = {
     return {
       date: selectedDate,
       metrics: {
-        totalBnPrints,         // 1. Total impresiones B/N
-        totalColorPrints,      // 2. Total impresiones color
-        totalCopies,           // 3. Copias
-        cartaSheetsUsed,       // 4. Hojas carta utilizadas
-        legalSheetsUsed,       // 5. Hojas legal utilizadas
-        inkConsumedMl: Number(inkConsumedMl.toFixed(2)), // 6. Tinta consumida (ml)
-        dailyRevenue,          // 7. Ingresos diarios
+        totalBnPrints,
+        totalColorPrints,
+        totalCopies,
+        cartaSheetsUsed,
+        legalSheetsUsed,
+        inkConsumedMl: Number(inkConsumedMl.toFixed(2)),
+        dailyRevenue,
         dailyProfit: dailyRevenue - dailyCost
       },
       logs

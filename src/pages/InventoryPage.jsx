@@ -6,12 +6,11 @@ import {
   SlidersHorizontal,
   Edit2,
   Trash2,
-  TrendingUp,
   AlertCircle,
-  ArrowUpRight,
   Boxes,
   X,
-  CheckCircle2
+  Layers,
+  Link2
 } from 'lucide-react';
 import { productsService } from '../services/productsService';
 import { formatCurrency } from '../lib/formatters';
@@ -32,7 +31,9 @@ export const InventoryPage = () => {
     cost_price: '',
     sale_price: '',
     stock: '',
-    min_stock: '5'
+    min_stock: '5',
+    units_deducted_per_sale: '1',
+    deduct_from_product_id: ''
   });
 
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
@@ -88,7 +89,9 @@ export const InventoryPage = () => {
         cost_price: product.cost_price.toString(),
         sale_price: product.sale_price.toString(),
         stock: product.stock.toString(),
-        min_stock: (product.min_stock || 5).toString()
+        min_stock: (product.min_stock || 5).toString(),
+        units_deducted_per_sale: (product.units_deducted_per_sale || 1).toString(),
+        deduct_from_product_id: product.deduct_from_product_id || ''
       });
     } else {
       setEditingProduct(null);
@@ -98,7 +101,9 @@ export const InventoryPage = () => {
         cost_price: '',
         sale_price: '',
         stock: '0',
-        min_stock: '5'
+        min_stock: '5',
+        units_deducted_per_sale: '1',
+        deduct_from_product_id: ''
       });
     }
     setIsProductModalOpen(true);
@@ -191,7 +196,7 @@ export const InventoryPage = () => {
             Inventario & Stock
           </h2>
           <p className="text-xs sm:text-sm text-slate-500">
-            Control de productos, costos, precios de venta y ajustes
+            Control de productos, papel, menudeo, precios en C$ y stock
           </p>
         </div>
 
@@ -215,7 +220,7 @@ export const InventoryPage = () => {
             {totalStockCount} <span className="text-xs font-medium text-slate-500">unid.</span>
           </p>
           <p className="text-[11px] text-blue-700 font-semibold mt-1">
-            {products.length} productos
+            {products.length} productos registrados
           </p>
         </div>
 
@@ -226,7 +231,7 @@ export const InventoryPage = () => {
           <p className="text-xl sm:text-2xl font-black text-white mt-1">
             {formatCurrency(totalCostInvestment)}
           </p>
-          <p className="text-[11px] text-blue-200 font-medium mt-1">Capital en inventario</p>
+          <p className="text-[11px] text-blue-200 font-medium mt-1">Capital en mercadería</p>
         </div>
       </div>
 
@@ -236,7 +241,7 @@ export const InventoryPage = () => {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar producto..."
+            placeholder="Buscar producto o papel..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-600"
@@ -272,6 +277,7 @@ export const InventoryPage = () => {
             const profit = Number(p.sale_price) - Number(p.cost_price);
             const isLow = p.stock <= (p.min_stock || 5);
             const isZero = p.stock <= 0;
+            const unitsDeducted = Number(p.units_deducted_per_sale) || 1;
 
             return (
               <div
@@ -279,7 +285,7 @@ export const InventoryPage = () => {
                 className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h4 className="font-bold text-slate-900 text-base">{p.name}</h4>
                     <span
                       className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
@@ -290,9 +296,17 @@ export const InventoryPage = () => {
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {p.stock} unid.
+                      {p.stock} unid. disp.
                     </span>
+
+                    {unitsDeducted > 1 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-blue-600" />
+                        Descuenta {unitsDeducted} hojas/unid. por venta
+                      </span>
+                    )}
                   </div>
+
                   {p.description && (
                     <p className="text-xs text-slate-500 mt-0.5">{p.description}</p>
                   )}
@@ -343,8 +357,8 @@ export const InventoryPage = () => {
       {/* Modal: Crear / Editar Producto */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200">
-            <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white shrink-0">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <Package className="w-5 h-5 text-blue-200" />
                 {editingProduct ? 'Editar Producto' : 'Crear Producto'}
@@ -357,7 +371,7 @@ export const InventoryPage = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
+            <form onSubmit={handleSaveProduct} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nombre del Producto *
@@ -365,7 +379,7 @@ export const InventoryPage = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Cerveza Toña / Libra de Arroz"
+                  placeholder="Ej. Hojas de Papel Carta / 3 Hojas Carta x C$2 / Cuaderno"
                   value={productForm.name}
                   onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition"
@@ -378,7 +392,7 @@ export const InventoryPage = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="Marca, detalles o notas"
+                  placeholder="Detalles, marca o notas del producto"
                   value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white transition"
@@ -388,7 +402,7 @@ export const InventoryPage = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Precio de Costo ($) *
+                    Precio de Costo (C$) *
                   </label>
                   <input
                     type="number"
@@ -404,7 +418,7 @@ export const InventoryPage = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Precio de Venta ($) *
+                    Precio de Venta (C$) *
                   </label>
                   <input
                     type="number"
@@ -417,6 +431,28 @@ export const InventoryPage = () => {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-black text-blue-700 focus:outline-none focus:border-blue-600 focus:bg-white transition"
                   />
                 </div>
+              </div>
+
+              {/* Venta Menudiada / Multiplicador de Stock */}
+              <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-2xl space-y-2">
+                <label className="block text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-blue-700" />
+                  Unidades físicas a descontar por venta (Menudeo / Combos)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="1"
+                  value={productForm.units_deducted_per_sale}
+                  onChange={(e) =>
+                    setProductForm({ ...productForm, units_deducted_per_sale: e.target.value })
+                  }
+                  className="w-full px-3.5 py-2 bg-white border border-blue-200 rounded-xl text-sm font-bold text-blue-900 focus:outline-none focus:border-blue-600"
+                />
+                <p className="text-[11px] text-blue-800 leading-tight">
+                  Ejemplo: Si vendes "3 Hojas Carta por C$2", pon <strong className="text-blue-950 font-bold">3</strong> para que al vender 1 combo descuente 3 hojas físicas del inventario.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -507,7 +543,7 @@ export const InventoryPage = () => {
                       setStockAdjustment({
                         ...stockAdjustment,
                         type: 'restock',
-                        note: 'Entrada de mercadería / Compra'
+                        note: 'Entrada de mercadería / Compra de resmas'
                       })
                     }
                     className={`p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
@@ -547,7 +583,7 @@ export const InventoryPage = () => {
                 <input
                   type="number"
                   required
-                  placeholder="Ej. 10"
+                  placeholder="Ej. 500"
                   value={stockAdjustment.quantity}
                   onChange={(e) =>
                     setStockAdjustment({ ...stockAdjustment, quantity: e.target.value })
@@ -562,7 +598,7 @@ export const InventoryPage = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. Compra a distribuidor, merma, etc."
+                  placeholder="Ej. Compra de resma de 500 hojas, etc."
                   value={stockAdjustment.note}
                   onChange={(e) =>
                     setStockAdjustment({ ...stockAdjustment, note: e.target.value })

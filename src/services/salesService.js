@@ -12,7 +12,7 @@ export const salesService = {
       throw new Error('El monto pagado no puede ser menor al total');
     }
 
-    // 1. Insertar venta
+    // 1. Insertar cabecera de venta
     const { data: saleData, error: saleErr } = await supabase
       .from('sales')
       .insert([
@@ -32,7 +32,7 @@ export const salesService = {
 
     const printItems = [];
 
-    // 2. Insertar items y descontar stock sólo para productos físicos
+    // 2. Procesar items y descontar stock correspondiente
     for (const item of items) {
       const isPrintService = item.item_type === 'print_service' || item.is_service;
 
@@ -60,19 +60,63 @@ export const salesService = {
             }
           }
         ]);
+
+        // DESCONTAR STOCK DE HOJAS FÍSICAS UTILIZADAS EN LA IMPRESIÓN/COPIA
+        const sheetsCount = Number(item.sheets_used) || Number(item.pages_count) || 1;
+        const paperType = item.paper_type || 'carta';
+
+        try {
+          // Buscar producto de papel en inventario
+          const { data: paperProducts } = await supabase
+            .from('products')
+            .select('id, name, stock')
+            .eq('is_active', true);
+
+          let targetPaper = null;
+          if (paperType === 'carta') {
+            targetPaper = (paperProducts || []).find(p => p.name.toLowerCase().includes('carta'));
+          } else {
+            targetPaper = (paperProducts || []).find(p => p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'));
+          }
+
+          if (targetPaper) {
+            const currentStock = targetPaper.stock || 0;
+            const newStock = Math.max(0, currentStock - sheetsCount);
+
+            await supabase
+              .from('products')
+              .update({ stock: newStock, updated_at: new Date().toISOString() })
+              .eq('id', targetPaper.id);
+
+            await supabase.from('stock_movements').insert([
+              {
+                product_id: targetPaper.id,
+                type: 'sale',
+                quantity: -sheetsCount,
+                previous_stock: currentStock,
+                new_stock: newStock,
+                reference_id: saleData.id,
+                note: `Consumo en ${item.name} - Factura #${saleData.invoice_number}`
+              }
+            ]);
+          }
+        } catch (paperErr) {
+          console.warn('Error al descontar stock de papel para impresión:', paperErr);
+        }
+
       } else {
-        // Producto físico tradicional
+        // Producto Físico o Menudeo (ej. 3 Hojas Carta x C$2)
         const { data: prod } = await supabase
           .from('products')
-          .select('name, stock, cost_price')
+          .select('id, name, stock, cost_price, units_deducted_per_sale, deduct_from_product_id')
           .eq('id', item.id)
           .single();
 
-        const currentStock = prod ? prod.stock : 0;
+        const unitsMultiplier = prod ? (Number(prod.units_deducted_per_sale) || 1) : 1;
+        const totalUnitsToDeduct = Number(item.quantity) * unitsMultiplier;
         const costPrice = prod ? prod.cost_price : (item.cost_price || 0);
-        const newStock = Math.max(0, currentStock - item.quantity);
 
-        // Insertar item
+        // Insertar item en detalle de venta
         await supabase.from('sale_items').insert([
           {
             sale_id: saleData.id,
@@ -82,32 +126,49 @@ export const salesService = {
             unit_price: Number(item.sale_price),
             quantity: item.quantity,
             subtotal: Number(item.quantity * item.sale_price),
-            item_type: 'product'
+            item_type: 'product',
+            metadata: {
+              units_deducted: totalUnitsToDeduct
+            }
           }
         ]);
 
-        // Descontar stock
-        await supabase
+        // Determinar qué producto descuenta stock (si tiene producto padre o él mismo)
+        const targetDeductId = (prod && prod.deduct_from_product_id) ? prod.deduct_from_product_id : item.id;
+
+        const { data: targetProd } = await supabase
           .from('products')
-          .update({ stock: newStock, updated_at: new Date().toISOString() })
-          .eq('id', item.id);
+          .select('name, stock')
+          .eq('id', targetDeductId)
+          .single();
 
-        // Registrar movimiento
-        await supabase.from('stock_movements').insert([
-          {
-            product_id: item.id,
-            type: 'sale',
-            quantity: -item.quantity,
-            previous_stock: currentStock,
-            new_stock: newStock,
-            reference_id: saleData.id,
-            note: `Venta Factura #${saleData.invoice_number}`
-          }
-        ]);
+        if (targetProd) {
+          const currentStock = targetProd.stock || 0;
+          const newStock = Math.max(0, currentStock - totalUnitsToDeduct);
+
+          // Descontar stock
+          await supabase
+            .from('products')
+            .update({ stock: newStock, updated_at: new Date().toISOString() })
+            .eq('id', targetDeductId);
+
+          // Registrar movimiento en Kardex
+          await supabase.from('stock_movements').insert([
+            {
+              product_id: targetDeductId,
+              type: 'sale',
+              quantity: -totalUnitsToDeduct,
+              previous_stock: currentStock,
+              new_stock: newStock,
+              reference_id: saleData.id,
+              note: `Venta de ${item.quantity} x "${item.name}" (Deducción: -${totalUnitsToDeduct} unid.) - Factura #${saleData.invoice_number}`
+            }
+          ]);
+        }
       }
     }
 
-    // 3. Si hubo impresiones, registrar en print_logs
+    // 3. Registrar logs de impresión si hubo
     if (printItems.length > 0) {
       await printService.logPrintJobs(saleData.id, printItems);
     }
@@ -198,34 +259,81 @@ export const salesService = {
 
     if (updateErr) throw updateErr;
 
-    // Reponer stock sólo para productos físicos
+    // Reponer stock para productos y para papel de impresiones
     for (const item of sale.sale_items || []) {
-      if (item.product_id && item.item_type !== 'print_service') {
+      if (item.item_type === 'print_service') {
+        const meta = item.metadata || {};
+        const sheetsCount = Number(meta.sheets_used) || Number(item.quantity) || 1;
+        const paperType = meta.paper_type || 'carta';
+
+        const { data: paperProducts } = await supabase
+          .from('products')
+          .select('id, name, stock')
+          .eq('is_active', true);
+
+        const targetPaper = (paperProducts || []).find(p =>
+          paperType === 'carta' ? p.name.toLowerCase().includes('carta') : (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))
+        );
+
+        if (targetPaper) {
+          const currentStock = targetPaper.stock || 0;
+          const newStock = currentStock + sheetsCount;
+
+          await supabase
+            .from('products')
+            .update({ stock: newStock, updated_at: new Date().toISOString() })
+            .eq('id', targetPaper.id);
+
+          await supabase.from('stock_movements').insert([
+            {
+              product_id: targetPaper.id,
+              type: 'cancel_sale',
+              quantity: sheetsCount,
+              previous_stock: currentStock,
+              new_stock: newStock,
+              reference_id: saleId,
+              note: `Devolución por Anulación Factura #${sale.invoice_number}`
+            }
+          ]);
+        }
+      } else if (item.product_id) {
         const { data: prod } = await supabase
           .from('products')
-          .select('stock')
+          .select('id, stock, units_deducted_per_sale, deduct_from_product_id')
           .eq('id', item.product_id)
           .single();
 
-        const currentStock = prod ? prod.stock : 0;
-        const newStock = currentStock + item.quantity;
+        const unitsMultiplier = prod ? (Number(prod.units_deducted_per_sale) || 1) : 1;
+        const unitsToRestore = Number(item.quantity) * unitsMultiplier;
+        const targetDeductId = (prod && prod.deduct_from_product_id) ? prod.deduct_from_product_id : item.product_id;
 
-        await supabase
+        const { data: targetProd } = await supabase
           .from('products')
-          .update({ stock: newStock, updated_at: new Date().toISOString() })
-          .eq('id', item.product_id);
+          .select('stock')
+          .eq('id', targetDeductId)
+          .single();
 
-        await supabase.from('stock_movements').insert([
-          {
-            product_id: item.product_id,
-            type: 'cancel_sale',
-            quantity: item.quantity,
-            previous_stock: currentStock,
-            new_stock: newStock,
-            reference_id: saleId,
-            note: `Anulación Factura #${sale.invoice_number}`
-          }
-        ]);
+        if (targetProd) {
+          const currentStock = targetProd.stock || 0;
+          const newStock = currentStock + unitsToRestore;
+
+          await supabase
+            .from('products')
+            .update({ stock: newStock, updated_at: new Date().toISOString() })
+            .eq('id', targetDeductId);
+
+          await supabase.from('stock_movements').insert([
+            {
+              product_id: targetDeductId,
+              type: 'cancel_sale',
+              quantity: unitsToRestore,
+              previous_stock: currentStock,
+              new_stock: newStock,
+              reference_id: saleId,
+              note: `Devolución Factura #${sale.invoice_number} (+${unitsToRestore} unid.)`
+            }
+          ]);
+        }
       }
     }
 
