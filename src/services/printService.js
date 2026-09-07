@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 // Tarifas Oficiales en Córdobas (C$)
 export const defaultPrintRates = [
   { service_type: 'copy_cedula', paper_type: 'carta', name: 'Copia de Cédula (Ambos Lados)', sale_price: 4.00, cost_price: 0.80, estimated_ink_ml: 0.050 },
+  { service_type: 'print_opalina', paper_type: 'carta', name: 'Impresión Opalina Color', sale_price: 15.00, cost_price: 3.50, estimated_ink_ml: 0.180 },
   { service_type: 'print_bn', paper_type: 'carta', name: 'Impresión B/N Carta', sale_price: 4.00, cost_price: 1.00, estimated_ink_ml: 0.050 },
   { service_type: 'print_bn', paper_type: 'legal', name: 'Impresión B/N Legal', sale_price: 5.00, cost_price: 1.25, estimated_ink_ml: 0.060 },
   { service_type: 'print_color', paper_type: 'carta', name: 'Impresión Color Carta', sale_price: 8.00, cost_price: 2.50, estimated_ink_ml: 0.150 },
@@ -25,9 +26,10 @@ export const printService = {
         .order('name', { ascending: true });
 
       if (!error && data && data.length > 0) {
-        // Si falta la tarifa de cédula, agregarla
+        // Si falta alguna tarifa predeterminada, agregarla
         const hasCedula = data.some(r => r.service_type === 'copy_cedula');
-        if (!hasCedula) {
+        const hasOpalina = data.some(r => r.service_type === 'print_opalina');
+        if (!hasCedula || !hasOpalina) {
           await this.syncOfficialRates(data);
           const { data: updatedData } = await supabase.from('print_rates').select('*').order('name', { ascending: true });
           if (updatedData) return updatedData;
@@ -163,7 +165,7 @@ export const printService = {
 
       if (log.service_type === 'print_bn') {
         totalBnPrints += pages;
-      } else if (log.service_type === 'print_color') {
+      } else if (log.service_type === 'print_color' || log.service_type === 'print_opalina') {
         totalColorPrints += pages;
       } else if (log.service_type === 'copy_bn' || log.service_type === 'copy_color' || log.service_type === 'copy_cedula') {
         totalCopies += pages;

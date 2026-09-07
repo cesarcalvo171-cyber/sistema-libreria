@@ -48,11 +48,11 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
 
   // Encontrar tarifa correspondiente
   const currentRate = rates.find(
-    (r) => r.service_type === serviceType && (serviceType === 'copy_cedula' ? true : r.paper_type === paperType)
+    (r) => r.service_type === serviceType && (serviceType === 'copy_cedula' || serviceType === 'print_opalina' ? true : r.paper_type === paperType)
   ) || {
-    sale_price: serviceType === 'copy_cedula' ? 4.0 : serviceType.includes('color') ? (paperType === 'legal' ? 10.0 : 8.0) : (paperType === 'legal' ? 5.0 : 4.0),
-    cost_price: 0.80,
-    estimated_ink_ml: 0.05
+    sale_price: serviceType === 'print_opalina' ? 15.0 : serviceType === 'copy_cedula' ? 4.0 : serviceType.includes('color') ? (paperType === 'legal' ? 10.0 : 8.0) : (paperType === 'legal' ? 5.0 : 4.0),
+    cost_price: serviceType === 'print_opalina' ? 3.50 : 0.80,
+    estimated_ink_ml: serviceType === 'print_opalina' ? 0.18 : 0.05
   };
 
   const effectiveUnitPrice = customUnitPrice !== ''
@@ -76,6 +76,8 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
     const serviceName =
       serviceType === 'copy_cedula'
         ? 'Copia de Cédula (Ambos Lados)'
+        : serviceType === 'print_opalina'
+        ? 'Impresión Opalina Color'
         : serviceType === 'print_bn'
         ? 'Impresión B/N'
         : serviceType === 'print_color'
@@ -84,7 +86,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
         ? 'Copia B/N'
         : 'Copia Color';
 
-    const paperLabel = serviceType === 'copy_cedula' ? 'Carta' : (paperType === 'carta' ? 'Carta' : 'Legal');
+    const paperLabel = (serviceType === 'copy_cedula' || serviceType === 'print_opalina') ? 'Carta' : (paperType === 'carta' ? 'Carta' : 'Legal');
     const duplexLabel = (serviceType !== 'copy_cedula' && isDuplex) ? ' (Doble Faz)' : '';
 
     const printItem = {
@@ -93,7 +95,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
       item_type: 'print_service',
       is_service: true,
       service_type: serviceType,
-      paper_type: serviceType === 'copy_cedula' ? 'carta' : paperType,
+      paper_type: (serviceType === 'copy_cedula' || serviceType === 'print_opalina') ? 'carta' : paperType,
       is_duplex: isDuplex,
       pages_count: pagesCount,
       sheets_used: sheetsUsed,
@@ -149,17 +151,37 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
                   setPaperType('carta');
                   setIsDuplex(false);
                 }}
-                className={`col-span-2 p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center justify-between ${
+                className={`p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center justify-between ${
                   serviceType === 'copy_cedula'
                     ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
                     : 'bg-blue-50/80 border-blue-200 text-blue-950 hover:bg-blue-100'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <CreditCard className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="font-black text-xs">🪪 Copia de Cédula (Ambos Lados)</span>
+                  <span className="font-black text-xs truncate">🪪 Cédula (Ambos Lados)</span>
                 </div>
-                <span className="font-black text-xs font-mono">C$ 4.00</span>
+                <span className="font-black text-xs font-mono shrink-0 ml-1">C$ 4</span>
+              </button>
+
+              {/* Botón Destacado: Impresión Opalina */}
+              <button
+                type="button"
+                onClick={() => {
+                  setServiceType('print_opalina');
+                  setPaperType('carta');
+                }}
+                className={`p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center justify-between ${
+                  serviceType === 'print_opalina'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                    : 'bg-indigo-50/80 border-indigo-200 text-indigo-950 hover:bg-indigo-100'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Droplets className="w-4 h-4 text-pink-500 shrink-0" />
+                  <span className="font-black text-xs truncate">✨ Opalina Color</span>
+                </div>
+                <span className="font-black text-xs font-mono shrink-0 ml-1">C$ 15</span>
               </button>
 
               <button
