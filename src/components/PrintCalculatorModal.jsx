@@ -7,6 +7,7 @@ import {
   FileText,
   Copy,
   Droplets,
+  CreditCard,
   ArrowRight
 } from 'lucide-react';
 import { printService } from '../services/printService';
@@ -18,7 +19,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
   const [loading, setLoading] = useState(true);
 
   // Opciones seleccionadas
-  const [serviceType, setServiceType] = useState('print_bn'); // 'print_bn', 'print_color', 'copy_bn', 'copy_color'
+  const [serviceType, setServiceType] = useState('print_bn'); // 'copy_cedula', 'print_bn', 'print_color', 'copy_bn', 'copy_color'
   const [paperType, setPaperType] = useState('carta'); // 'carta', 'legal'
   const [isDuplex, setIsDuplex] = useState(false); // Doble faz
   const [pagesCount, setPagesCount] = useState(1);
@@ -45,13 +46,13 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
     }
   };
 
-  // Encontrar tarifa correspondiente según la tabla solicitada
+  // Encontrar tarifa correspondiente
   const currentRate = rates.find(
-    (r) => r.service_type === serviceType && r.paper_type === paperType
+    (r) => r.service_type === serviceType && (serviceType === 'copy_cedula' ? true : r.paper_type === paperType)
   ) || {
-    sale_price: serviceType.includes('color') ? (paperType === 'legal' ? 10.0 : 8.0) : (paperType === 'legal' ? 5.0 : 4.0),
-    cost_price: 1.0,
-    estimated_ink_ml: serviceType.includes('color') ? 0.15 : 0.05
+    sale_price: serviceType === 'copy_cedula' ? 4.0 : serviceType.includes('color') ? (paperType === 'legal' ? 10.0 : 8.0) : (paperType === 'legal' ? 5.0 : 4.0),
+    cost_price: 0.80,
+    estimated_ink_ml: 0.05
   };
 
   const effectiveUnitPrice = customUnitPrice !== ''
@@ -68,12 +69,14 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
 
   const handleAdd = () => {
     if (pagesCount <= 0) {
-      toast.warning('Ingresa al menos 1 página');
+      toast.warning('Ingresa al menos 1');
       return;
     }
 
     const serviceName =
-      serviceType === 'print_bn'
+      serviceType === 'copy_cedula'
+        ? 'Copia de Cédula (Ambos Lados)'
+        : serviceType === 'print_bn'
         ? 'Impresión B/N'
         : serviceType === 'print_color'
         ? 'Impresión Color'
@@ -81,16 +84,16 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
         ? 'Copia B/N'
         : 'Copia Color';
 
-    const paperLabel = paperType === 'carta' ? 'Carta' : 'Legal';
-    const duplexLabel = isDuplex ? ' (Doble Faz)' : '';
+    const paperLabel = serviceType === 'copy_cedula' ? 'Carta' : (paperType === 'carta' ? 'Carta' : 'Legal');
+    const duplexLabel = (serviceType !== 'copy_cedula' && isDuplex) ? ' (Doble Faz)' : '';
 
     const printItem = {
       id: `print-${Date.now()}`,
-      name: `${serviceName} ${paperLabel}${duplexLabel} [${pagesCount} págs]`,
+      name: `${serviceName} ${paperLabel}${duplexLabel} [${pagesCount} ${serviceType === 'copy_cedula' ? 'cédula(s)' : 'págs'}]`,
       item_type: 'print_service',
       is_service: true,
       service_type: serviceType,
-      paper_type: paperType,
+      paper_type: serviceType === 'copy_cedula' ? 'carta' : paperType,
       is_duplex: isDuplex,
       pages_count: pagesCount,
       sheets_used: sheetsUsed,
@@ -138,6 +141,27 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
               1. Tipo de Servicio
             </label>
             <div className="grid grid-cols-2 gap-2">
+              {/* Botón Destacado: Copia de Cédula */}
+              <button
+                type="button"
+                onClick={() => {
+                  setServiceType('copy_cedula');
+                  setPaperType('carta');
+                  setIsDuplex(false);
+                }}
+                className={`col-span-2 p-2.5 rounded-2xl border text-left transition-all active:scale-98 flex items-center justify-between ${
+                  serviceType === 'copy_cedula'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                    : 'bg-blue-50/80 border-blue-200 text-blue-950 hover:bg-blue-100'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="font-black text-xs">🪪 Copia de Cédula (Ambos Lados)</span>
+                </div>
+                <span className="font-black text-xs font-mono">C$ 4.00</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setServiceType('print_bn')}
@@ -192,62 +216,63 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
             </div>
           </div>
 
-          {/* 2. Tamaño de Papel & Doble Faz */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-              2. Tamaño de Papel
-            </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPaperType('carta')}
-                className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
-                  paperType === 'carta'
-                    ? 'bg-blue-700 text-white border-blue-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-700'
-                }`}
-              >
-                Carta (8.5x11)
-              </button>
+          {/* 2. Tamaño de Papel & Doble Faz (Oculto/Fijado en Carta si es Cédula) */}
+          {serviceType !== 'copy_cedula' && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                2. Tamaño de Papel
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPaperType('carta')}
+                  className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
+                    paperType === 'carta'
+                      ? 'bg-blue-700 text-white border-blue-700'
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  Carta (8.5x11)
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setPaperType('legal')}
-                className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
-                  paperType === 'legal'
-                    ? 'bg-blue-700 text-white border-blue-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-700'
-                }`}
-              >
-                Legal / Oficio
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPaperType('legal')}
+                  className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
+                    paperType === 'legal'
+                      ? 'bg-blue-700 text-white border-blue-700'
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  Legal / Oficio
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setIsDuplex(!isDuplex)}
-                className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
-                  isDuplex
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'bg-slate-50 border-slate-200 text-slate-700'
-                }`}
-              >
-                {isDuplex ? '✓ Doble Faz' : '1 Sola Cara'}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDuplex(!isDuplex)}
+                  className={`py-2 px-1.5 rounded-xl border text-xs font-bold transition flex items-center justify-center text-center truncate ${
+                    isDuplex
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  {isDuplex ? '✓ Doble Faz' : '1 Sola Cara'}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* 3. Cantidad de Páginas (Ajustado para que NUNCA sobresalga en móvil) */}
+          {/* 3. Cantidad de Páginas o Cédulas */}
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2 max-w-full overflow-hidden">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800">
-                Cantidad de Páginas
+                {serviceType === 'copy_cedula' ? 'Cantidad de Cédulas' : 'Cantidad de Páginas'}
               </label>
               <span className="text-xs text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
                 Tarifa: {formatCurrency(effectiveUnitPrice)} c/u
               </span>
             </div>
 
-            {/* Selector Numérico Compacto y Responsive con Grid */}
             <div className="grid grid-cols-[2.75rem_1fr_2.75rem] gap-2 items-center w-full">
               <button
                 type="button"
@@ -274,9 +299,8 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
               </button>
             </div>
 
-            {/* Atajos Rápidos */}
             <div className="grid grid-cols-4 gap-1.5 pt-0.5">
-              {[5, 10, 20, 50].map((num) => (
+              {[1, 2, 5, 10].map((num) => (
                 <button
                   key={num}
                   type="button"
@@ -294,7 +318,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
             <div>
               <span className="text-slate-500 text-[11px] block">Hojas de Papel:</span>
               <strong className="text-slate-900 text-xs">
-                {sheetsUsed} hoja{sheetsUsed > 1 ? 's' : ''} ({paperType.toUpperCase()})
+                {sheetsUsed} hoja{sheetsUsed > 1 ? 's' : ''} (CARTA)
               </strong>
             </div>
             <div>
