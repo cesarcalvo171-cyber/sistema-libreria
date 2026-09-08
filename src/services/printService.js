@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 // Tarifas Oficiales en Córdobas (C$)
 export const defaultPrintRates = [
   { service_type: 'copy_cedula', paper_type: 'carta', name: 'Copia de Cédula (Ambos Lados)', sale_price: 4.00, cost_price: 0.80, estimated_ink_ml: 0.050 },
-  { service_type: 'print_opalina', paper_type: 'carta', name: 'Impresión Opalina Color', sale_price: 15.00, cost_price: 3.50, estimated_ink_ml: 0.180 },
+  { service_type: 'print_opalina', paper_type: 'carta', name: 'Impresión Opalina Color', sale_price: 15.00, cost_price: 3.52, estimated_ink_ml: 0.180 },
   { service_type: 'print_bn', paper_type: 'carta', name: 'Impresión B/N Carta', sale_price: 4.00, cost_price: 1.00, estimated_ink_ml: 0.050 },
   { service_type: 'print_bn', paper_type: 'legal', name: 'Impresión B/N Legal', sale_price: 5.00, cost_price: 1.25, estimated_ink_ml: 0.060 },
   { service_type: 'print_color', paper_type: 'carta', name: 'Impresión Color Carta', sale_price: 8.00, cost_price: 2.50, estimated_ink_ml: 0.150 },
@@ -142,6 +142,7 @@ export const printService = {
     let totalCopies = 0;
     let cartaSheetsUsed = 0;
     let legalSheetsUsed = 0;
+    let opalinaSheetsUsed = 0;
     let inkConsumedMl = 0;
     let dailyRevenue = 0;
     let dailyCost = 0;
@@ -157,7 +158,9 @@ export const printService = {
       dailyCost += cost;
       inkConsumedMl += ink;
 
-      if (log.paper_type === 'carta') {
+      if (log.service_type === 'print_opalina') {
+        opalinaSheetsUsed += sheets;
+      } else if (log.paper_type === 'carta') {
         cartaSheetsUsed += sheets;
       } else if (log.paper_type === 'legal') {
         legalSheetsUsed += sheets;
@@ -180,6 +183,7 @@ export const printService = {
         totalCopies,
         cartaSheetsUsed,
         legalSheetsUsed,
+        opalinaSheetsUsed,
         inkConsumedMl: Number(inkConsumedMl.toFixed(2)),
         dailyRevenue,
         dailyProfit: dailyRevenue - dailyCost

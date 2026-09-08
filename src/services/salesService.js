@@ -3,7 +3,8 @@ import { printService } from './printService';
 
 export const salesService = {
   // Helper para encontrar el producto de papel adecuado
-  findPaperProduct(productsList, paperType) {
+  findPaperProduct(productsList, paperType, serviceType = '') {
+    const isOpalina = paperType.toLowerCase().includes('opalina') || serviceType === 'print_opalina';
     const isCarta = paperType.toLowerCase() === 'carta';
     const invalidKeywords = ['foamy', 'fomi', 'sobre', 'folder', 'carpeta', 'crayola', 'creppe', 'silicon', 'plastilina'];
 
@@ -12,13 +13,22 @@ export const salesService = {
       return !invalidKeywords.some(k => n.includes(k));
     });
 
-    if (isCarta) {
-      // 1. Prioridad: "Resma de papel Bond Carta", "Hojas de Papel Carta", etc.
+    if (isOpalina) {
       return (
-        filtered.find(p => p.name.toLowerCase().includes('papel') && p.name.toLowerCase().includes('carta')) ||
-        filtered.find(p => p.name.toLowerCase().includes('resma') && p.name.toLowerCase().includes('carta')) ||
-        filtered.find(p => p.name.toLowerCase().includes('hoja') && p.name.toLowerCase().includes('carta')) ||
-        filtered.find(p => p.name.toLowerCase().includes('carta')) ||
+        filtered.find(p => p.name.toLowerCase().includes('opalina')) ||
+        (productsList || []).find(p => p.name.toLowerCase().includes('opalina')) ||
+        null
+      );
+    }
+
+    if (isCarta) {
+      // 1. Prioridad: "Resma de papel Bond Carta", "Hojas de Papel Carta", etc. (excluyendo opalina)
+      const nonOpalina = filtered.filter(p => !p.name.toLowerCase().includes('opalina'));
+      return (
+        nonOpalina.find(p => p.name.toLowerCase().includes('papel') && p.name.toLowerCase().includes('carta')) ||
+        nonOpalina.find(p => p.name.toLowerCase().includes('resma') && p.name.toLowerCase().includes('carta')) ||
+        nonOpalina.find(p => p.name.toLowerCase().includes('hoja') && p.name.toLowerCase().includes('carta')) ||
+        nonOpalina.find(p => p.name.toLowerCase().includes('carta')) ||
         null
       );
     } else {
@@ -112,7 +122,7 @@ export const salesService = {
             .select('*')
             .eq('is_active', true);
 
-          const targetPaper = this.findPaperProduct(allProds, paperType);
+          const targetPaper = this.findPaperProduct(allProds, paperType, item.service_type);
 
           if (targetPaper) {
             const currentStock = Number(targetPaper.stock) || 0;
@@ -309,7 +319,7 @@ export const salesService = {
           .select('*')
           .eq('is_active', true);
 
-        const targetPaper = this.findPaperProduct(allProds, paperType);
+        const targetPaper = this.findPaperProduct(allProds, paperType, meta.service_type);
 
         if (targetPaper) {
           const currentStock = Number(targetPaper.stock) || 0;
@@ -447,7 +457,7 @@ export const salesService = {
 
         // 3. Ajustar stock de papel si cambió
         if (sheetsDiff !== 0) {
-          const targetPaper = this.findPaperProduct(allProds, paperType);
+          const targetPaper = this.findPaperProduct(allProds, paperType, meta.service_type);
           if (targetPaper) {
             const currentStock = Number(targetPaper.stock) || 0;
             const newStock = Math.max(0, currentStock - sheetsDiff);

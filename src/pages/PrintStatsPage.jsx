@@ -157,8 +157,8 @@ export const PrintStatsPage = () => {
             </div>
           </div>
 
-          {/* 2. Grid con las 6 Métricas de Insumos y Conteo */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          {/* 2. Grid con las Métricas de Insumos y Conteo */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
             {/* Métrica 1: Impresiones B/N */}
             <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between text-slate-400">
@@ -204,7 +204,7 @@ export const PrintStatsPage = () => {
               <p className="text-xl sm:text-2xl font-black text-emerald-700 mt-1">
                 {stats.metrics.cartaSheetsUsed}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">hojas físicas</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">hojas bond carta</p>
             </div>
 
             {/* Métrica 5: Hojas Legal */}
@@ -216,13 +216,25 @@ export const PrintStatsPage = () => {
               <p className="text-xl sm:text-2xl font-black text-amber-700 mt-1">
                 {stats.metrics.legalSheetsUsed}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">hojas oficio</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">hojas bond legal</p>
             </div>
 
-            {/* Métrica 6: Tinta Consumida */}
+            {/* Métrica 6: Hojas Opalina */}
+            <div className="p-4 bg-white border border-indigo-200 rounded-2xl shadow-xs bg-indigo-50/20">
+              <div className="flex items-center justify-between text-indigo-600">
+                <span className="text-[10px] font-bold uppercase block">6. Hojas Opalina</span>
+                <Layers className="w-4 h-4 text-indigo-600" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-indigo-900 mt-1">
+                {stats.metrics.opalinaSheetsUsed || 0}
+              </p>
+              <p className="text-[11px] text-indigo-600 font-medium mt-0.5">hojas opalina</p>
+            </div>
+
+            {/* Métrica 7: Tinta Consumida */}
             <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between text-purple-600">
-                <span className="text-[10px] font-bold uppercase block">6. Tinta Est.</span>
+                <span className="text-[10px] font-bold uppercase block">7. Tinta Est.</span>
                 <Droplets className="w-4 h-4" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-purple-700 mt-1">
