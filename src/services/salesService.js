@@ -374,5 +374,172 @@ export const salesService = {
     }
 
     return { success: true, message: 'Factura anulada con éxito' };
+  },
+
+  // Editar factura: modificar cantidades / precios de los items y sincronizar stock y print_logs
+  async updateSale(saleId, { items, amountPaid = null, notes = null }) {
+    const sale = await this.getById(saleId);
+    if (!sale) throw new Error('Factura no encontrada');
+    if (sale.status === 'cancelled') throw new Error('No se puede editar una factura anulada');
+
+    const { data: allProds } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true);
+
+    let newTotal = 0;
+
+    for (const item of items) {
+      const originalItem = (sale.sale_items || []).find(i => i.id === item.id);
+      if (!originalItem) continue;
+
+      const newQty = Number(item.quantity) || 1;
+      const newUnitPrice = Number(item.unit_price) >= 0 ? Number(item.unit_price) : Number(originalItem.unit_price);
+      const newSubtotal = newQty * newUnitPrice;
+      newTotal += newSubtotal;
+
+      const oldQty = Number(originalItem.quantity) || 1;
+      const diffQty = newQty - oldQty; // si positivo, se vendió más (descontar más stock); si negativo, se vendió menos (devolver stock)
+
+      if (originalItem.item_type === 'print_service') {
+        const meta = originalItem.metadata || {};
+        const isDuplex = Boolean(meta.is_duplex);
+        const paperType = (meta.paper_type || 'carta').toLowerCase();
+
+        const basePagesPerUnit = Math.max(1, Math.round((Number(meta.pages_count) || 1) / oldQty));
+        const newPagesCount = basePagesPerUnit * newQty;
+        const newSheetsUsed = isDuplex ? Math.ceil(newPagesCount / 2) : newPagesCount;
+        const oldSheetsUsed = Number(meta.sheets_used) || oldQty;
+        const sheetsDiff = newSheetsUsed - oldSheetsUsed;
+
+        const baseInkPerUnit = (Number(meta.ink_used_estimate) || 0.05) / oldQty;
+        const newInkUsed = Number((baseInkPerUnit * newQty).toFixed(2));
+
+        const updatedMetadata = {
+          ...meta,
+          pages_count: newPagesCount,
+          sheets_used: newSheetsUsed,
+          ink_used_estimate: newInkUsed
+        };
+
+        // 1. Actualizar sale_item
+        await supabase
+          .from('sale_items')
+          .update({
+            quantity: newQty,
+            unit_price: newUnitPrice,
+            subtotal: newSubtotal,
+            metadata: updatedMetadata
+          })
+          .eq('id', originalItem.id);
+
+        // 2. Actualizar o ajustar print_logs
+        await supabase
+          .from('print_logs')
+          .update({
+            pages_count: newPagesCount,
+            sheets_used: newSheetsUsed,
+            ink_used_estimate: newInkUsed,
+            unit_price: newUnitPrice,
+            subtotal: newSubtotal
+          })
+          .eq('sale_id', saleId);
+
+        // 3. Ajustar stock de papel si cambió
+        if (sheetsDiff !== 0) {
+          const targetPaper = this.findPaperProduct(allProds, paperType);
+          if (targetPaper) {
+            const currentStock = Number(targetPaper.stock) || 0;
+            const newStock = Math.max(0, currentStock - sheetsDiff);
+
+            await supabase
+              .from('products')
+              .update({ stock: newStock, updated_at: new Date().toISOString() })
+              .eq('id', targetPaper.id);
+
+            await supabase.from('stock_movements').insert([
+              {
+                product_id: targetPaper.id,
+                type: sheetsDiff > 0 ? 'sale' : 'cancel_sale',
+                quantity: -sheetsDiff,
+                previous_stock: currentStock,
+                new_stock: newStock,
+                reference_id: saleId,
+                note: `Edición Factura #${sale.invoice_number} (${sheetsDiff > 0 ? '-' : '+'}${Math.abs(sheetsDiff)} hojas)`
+              }
+            ]);
+          }
+        }
+      } else if (originalItem.product_id) {
+        // Producto físico
+        const { data: prod } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', originalItem.product_id)
+          .single();
+
+        const unitsMultiplier = prod ? (Number(prod.units_deducted_per_sale) || 1) : 1;
+        const unitsDiff = diffQty * unitsMultiplier;
+        const targetDeductId = (prod && prod.deduct_from_product_id) ? prod.deduct_from_product_id : originalItem.product_id;
+
+        await supabase
+          .from('sale_items')
+          .update({
+            quantity: newQty,
+            unit_price: newUnitPrice,
+            subtotal: newSubtotal
+          })
+          .eq('id', originalItem.id);
+
+        if (unitsDiff !== 0) {
+          const { data: targetProd } = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', targetDeductId)
+            .single();
+
+          if (targetProd) {
+            const currentStock = Number(targetProd.stock) || 0;
+            const newStock = Math.max(0, currentStock - unitsDiff);
+
+            await supabase
+              .from('products')
+              .update({ stock: newStock, updated_at: new Date().toISOString() })
+              .eq('id', targetDeductId);
+
+            await supabase.from('stock_movements').insert([
+              {
+                product_id: targetDeductId,
+                type: unitsDiff > 0 ? 'sale' : 'cancel_sale',
+                quantity: -unitsDiff,
+                previous_stock: currentStock,
+                new_stock: newStock,
+                reference_id: saleId,
+                note: `Edición Factura #${sale.invoice_number} (${unitsDiff > 0 ? '-' : '+'}${Math.abs(unitsDiff)} unid.)`
+              }
+            ]);
+          }
+        }
+      }
+    }
+
+    const finalAmountPaid = amountPaid !== null ? Number(amountPaid) : Math.max(Number(sale.amount_paid), newTotal);
+    const finalChangeGiven = Math.max(0, finalAmountPaid - newTotal);
+
+    const updatePayload = {
+      total: newTotal,
+      amount_paid: finalAmountPaid,
+      change_given: finalChangeGiven
+    };
+    if (notes !== null) {
+      updatePayload.notes = notes;
+    }
+
+    await supabase
+      .from('sales')
+      .update(updatePayload)
+      .eq('id', saleId);
+
+    return { success: true, message: 'Factura actualizada con éxito' };
   }
 };

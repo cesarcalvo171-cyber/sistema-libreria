@@ -38,6 +38,11 @@ export const SalesHistoryPage = () => {
   const [selectedSale, setSelectedSale] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
+  const [saleToEdit, setSaleToEdit] = useState(null);
+  const [editingItems, setEditingItems] = useState([]);
+  const [editingNotes, setEditingNotes] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [saleToCancel, setSaleToCancel] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
@@ -54,6 +59,62 @@ export const SalesHistoryPage = () => {
       setLoading(false);
     }
   };
+
+  const handleOpenEditModal = (sale) => {
+    setSaleToEdit(sale);
+    setEditingItems(
+      (sale.sale_items || []).map((i) => ({
+        id: i.id,
+        name: i.product_name,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        item_type: i.item_type
+      }))
+    );
+    setEditingNotes(sale.notes || '');
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!saleToEdit) return;
+
+    try {
+      setSavingEdit(true);
+      await salesService.updateSale(saleToEdit.id, {
+        items: editingItems,
+        notes: editingNotes
+      });
+      toast.success(`Factura #${saleToEdit.invoice_number} actualizada con éxito`);
+      setSaleToEdit(null);
+      await loadSales();
+      if (selectedSale?.id === saleToEdit.id) {
+        setIsDetailModalOpen(false);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar cambios: ' + (err.message || ''));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const updateEditItemQty = (idx, newQty) => {
+    const qty = Math.max(1, parseInt(newQty, 10) || 1);
+    const updated = [...editingItems];
+    updated[idx] = { ...updated[idx], quantity: qty };
+    setEditingItems(updated);
+  };
+
+  const updateEditItemPrice = (idx, newPrice) => {
+    const price = Math.max(0, parseFloat(newPrice) || 0);
+    const updated = [...editingItems];
+    updated[idx] = { ...updated[idx], unit_price: price };
+    setEditingItems(updated);
+  };
+
+  const editedSubtotal = useMemo(() => {
+    return editingItems.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.unit_price)), 0);
+  }, [editingItems]);
 
   useEffect(() => {
     loadSales();
@@ -514,7 +575,7 @@ export const SalesHistoryPage = () => {
                           </div>
 
                           {/* Acciones */}
-                          <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end">
+                          <div className="flex items-center gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end">
                             <button
                               onClick={() => {
                                 setSelectedSale(sale);
@@ -527,16 +588,25 @@ export const SalesHistoryPage = () => {
                             </button>
 
                             {!isCancelled && (
-                              <button
-                                onClick={() => {
-                                  setSaleToCancel(sale);
-                                  setCancelReason('');
-                                }}
-                                className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 transition active:scale-95"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                Anular
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenEditModal(sale)}
+                                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs border border-blue-200 transition active:scale-95 shadow-2xs"
+                                >
+                                  ✏️ Editar
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setSaleToCancel(sale);
+                                    setCancelReason('');
+                                  }}
+                                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 transition active:scale-95"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  Anular
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -615,14 +685,139 @@ export const SalesHistoryPage = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-between items-center">
+              {selectedSale.status !== 'cancelled' && (
+                <button
+                  onClick={() => {
+                    setIsDetailModalOpen(false);
+                    handleOpenEditModal(selectedSale);
+                  }}
+                  className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs border border-blue-200 transition"
+                >
+                  ✏️ Editar Factura
+                </button>
+              )}
               <button
                 onClick={() => setIsDetailModalOpen(false)}
-                className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-sm transition"
+                className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-sm transition ml-auto"
               >
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Factura */}
+      {saleToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white">
+              <div>
+                <h3 className="font-bold text-base flex items-center gap-2">
+                  ✏️ Modificar Factura #{saleToEdit.invoice_number}
+                </h3>
+                <p className="text-xs text-blue-200">Ajusta cantidades o precios de los ítems</p>
+              </div>
+              <button
+                onClick={() => setSaleToEdit(null)}
+                className="p-1 text-blue-200 hover:text-white rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="space-y-3">
+                {editingItems.map((item, idx) => (
+                  <div
+                    key={item.id || idx}
+                    className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-bold text-sm text-slate-900 truncate flex-1">{item.name}</h5>
+                      <span className="text-xs font-mono font-black text-blue-900 ml-2">
+                        {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                          Cantidad / Páginas
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateEditItemQty(idx, e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                          Precio Unitario (C$)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={item.unit_price}
+                          onChange={(e) => updateEditItemPrice(idx, e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Notas de la Factura (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={editingNotes}
+                  onChange={(e) => setEditingNotes(e.target.value)}
+                  placeholder="Observaciones..."
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900"
+                />
+              </div>
+
+              {/* Total recalculado */}
+              <div className="p-3 bg-blue-50/80 rounded-2xl border border-blue-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-950">Nuevo Total Factura:</span>
+                <span className="text-lg font-black text-blue-900 font-mono">
+                  {formatCurrency(editedSubtotal)}
+                </span>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setSaleToEdit(null)}
+                  className="px-4 py-2 text-sm text-slate-500 font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-sm shadow-md shadow-blue-700/20 transition flex items-center gap-2"
+                >
+                  {savingEdit ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    'Guardar Cambios'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
