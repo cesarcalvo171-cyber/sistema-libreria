@@ -127,9 +127,32 @@ export const POSPage = () => {
     }
 
     setCart((prevCart) =>
-      prevCart.map((i) =>
-        i.id === productId ? { ...i, quantity: newQty } : i
-      )
+      prevCart.map((i) => {
+        if (i.id !== productId) return i;
+
+        if (i.item_type === 'print_service') {
+          const prevQty = i.quantity || 1;
+          const basePages = Math.max(1, Math.round((i.pages_count || 1) / prevQty));
+          const newPages = basePages * newQty;
+          const newSheets = i.is_duplex ? Math.ceil(newPages / 2) : newPages;
+          const baseInk = (i.ink_used_estimate || 0.05) / prevQty;
+          const newInk = Number((baseInk * newQty).toFixed(2));
+
+          // Actualizar etiqueta del nombre si tiene [X págs]
+          const updatedName = i.name.replace(/\[\d+\s+[^\]]+\]/, `[${newPages} ${i.service_type === 'copy_cedula' ? 'cédula(s)' : 'págs'}]`);
+
+          return {
+            ...i,
+            quantity: newQty,
+            pages_count: newPages,
+            sheets_used: newSheets,
+            ink_used_estimate: newInk,
+            name: updatedName
+          };
+        }
+
+        return { ...i, quantity: newQty };
+      })
     );
   };
 

@@ -68,7 +68,17 @@ export const salesService = {
       const isPrintService = item.item_type === 'print_service' || item.is_service;
 
       if (isPrintService) {
-        printItems.push(item);
+        const itemQuantity = Number(item.quantity) || 1;
+        const totalPages = (Number(item.pages_count) || 1) * (item.pages_count ? 1 : itemQuantity);
+        const totalSheets = Number(item.sheets_used) || totalPages;
+        const totalInk = Number(item.ink_used_estimate) || 0;
+
+        printItems.push({
+          ...item,
+          pages_count: totalPages,
+          sheets_used: totalSheets,
+          ink_used_estimate: totalInk
+        });
 
         // Insertar detalle de venta para servicio de impresión
         await supabase.from('sale_items').insert([
@@ -78,22 +88,22 @@ export const salesService = {
             product_name: item.name,
             cost_price: Number(item.cost_price) || 0,
             unit_price: Number(item.sale_price) || 0,
-            quantity: Number(item.quantity) || 1,
-            subtotal: Number(item.quantity * item.sale_price),
+            quantity: itemQuantity,
+            subtotal: Number(itemQuantity * item.sale_price),
             item_type: 'print_service',
             metadata: {
               service_type: item.service_type,
               paper_type: item.paper_type,
               is_duplex: item.is_duplex,
-              pages_count: item.pages_count,
-              sheets_used: item.sheets_used,
-              ink_used_estimate: item.ink_used_estimate
+              pages_count: totalPages,
+              sheets_used: totalSheets,
+              ink_used_estimate: totalInk
             }
           }
         ]);
 
         // DESCONTAR STOCK DE HOJAS FÍSICAS UTILIZADAS EN LA IMPRESIÓN/COPIA
-        const sheetsCount = Number(item.sheets_used) || Number(item.pages_count) || 1;
+        const sheetsCount = totalSheets;
         const paperType = (item.paper_type || 'carta').toLowerCase();
 
         try {

@@ -99,12 +99,12 @@ export const printService = {
       service_type: item.service_type || 'print_bn',
       paper_type: item.paper_type || 'carta',
       is_duplex: Boolean(item.is_duplex),
-      pages_count: Number(item.pages_count || item.quantity) || 1,
-      sheets_used: Number(item.sheets_used) || 1,
+      pages_count: Number(item.pages_count) || Number(item.quantity) || 1,
+      sheets_used: Number(item.sheets_used) || Number(item.pages_count) || Number(item.quantity) || 1,
       ink_used_estimate: Number(item.ink_used_estimate) || 0,
       unit_price: Number(item.sale_price) || 0,
       cost_price: Number(item.cost_price) || 0,
-      subtotal: Number(item.sale_price * item.quantity) || 0
+      subtotal: Number(item.sale_price * (item.quantity || 1)) || 0
     }));
 
     try {
