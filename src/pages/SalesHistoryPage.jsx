@@ -8,10 +8,17 @@ import {
   Eye,
   X,
   AlertTriangle,
-  Receipt
+  Receipt,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  ChevronDown,
+  ChevronRight,
+  Filter,
+  Layers
 } from 'lucide-react';
 import { salesService } from '../services/salesService';
-import { formatCurrency, formatDateTime } from '../lib/formatters';
+import { formatCurrency, formatDateTime, formatDate } from '../lib/formatters';
 import { toast } from 'sonner';
 
 export const SalesHistoryPage = () => {
@@ -19,6 +26,14 @@ export const SalesHistoryPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Filtro de fechas: 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'
+  const [dateFilter, setDateFilter] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Agrupación colapsable
+  const [collapsedDates, setCollapsedDates] = useState({});
 
   const [selectedSale, setSelectedSale] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -44,6 +59,79 @@ export const SalesHistoryPage = () => {
     loadSales();
   }, []);
 
+  // Helper de fechas en hora local
+  const getLocalDateString = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  // Métricas para el Dashboard Global
+  const metrics = useMemo(() => {
+    let todayTotal = 0;
+    let todayCount = 0;
+    let monthTotal = 0;
+    let monthCount = 0;
+    let grandTotal = 0;
+    let completedCount = 0;
+    let cancelledCount = 0;
+
+    const currentYearMonth = todayStr.substring(0, 7);
+
+    sales.forEach((s) => {
+      const isCompleted = s.status === 'completed';
+      const saleDateStr = getLocalDateString(s.created_at);
+
+      if (isCompleted) {
+        grandTotal += Number(s.total || 0);
+        completedCount++;
+
+        if (saleDateStr === todayStr) {
+          todayTotal += Number(s.total || 0);
+          todayCount++;
+        }
+
+        if (saleDateStr.startsWith(currentYearMonth)) {
+          monthTotal += Number(s.total || 0);
+          monthCount++;
+        }
+      } else {
+        cancelledCount++;
+      }
+    });
+
+    return {
+      todayTotal,
+      todayCount,
+      monthTotal,
+      monthCount,
+      grandTotal,
+      completedCount,
+      cancelledCount
+    };
+  }, [sales, todayStr]);
+
+  // Filtrado de ventas por búsqueda, estado y rango de fechas
   const filteredSales = useMemo(() => {
     return sales.filter((sale) => {
       const invoiceStr = (sale.invoice_number || '').toString();
@@ -53,19 +141,69 @@ export const SalesHistoryPage = () => {
       const matchesQuery = invoiceStr.includes(q) || notesStr.includes(q);
       const matchesStatus = statusFilter === 'all' ? true : sale.status === statusFilter;
 
-      return matchesQuery && matchesStatus;
+      const saleDateStr = getLocalDateString(sale.created_at);
+
+      let matchesDate = true;
+      if (dateFilter === 'today') {
+        matchesDate = saleDateStr === todayStr;
+      } else if (dateFilter === 'yesterday') {
+        matchesDate = saleDateStr === yesterdayStr;
+      } else if (dateFilter === 'week') {
+        const d = new Date();
+        const firstDayOfWeek = new Date(d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1)));
+        const startWeekStr = `${firstDayOfWeek.getFullYear()}-${String(firstDayOfWeek.getMonth() + 1).padStart(2, '0')}-${String(firstDayOfWeek.getDate()).padStart(2, '0')}`;
+        matchesDate = saleDateStr >= startWeekStr && saleDateStr <= todayStr;
+      } else if (dateFilter === 'month') {
+        matchesDate = saleDateStr.startsWith(todayStr.substring(0, 7));
+      } else if (dateFilter === 'custom') {
+        if (startDate && saleDateStr < startDate) matchesDate = false;
+        if (endDate && saleDateStr > endDate) matchesDate = false;
+      }
+
+      return matchesQuery && matchesStatus && matchesDate;
     });
-  }, [sales, searchQuery, statusFilter]);
+  }, [sales, searchQuery, statusFilter, dateFilter, startDate, endDate, todayStr, yesterdayStr]);
 
-  const totalCompletedSales = useMemo(() => {
-    return sales
+  // Agrupar ventas filtradas por fecha con subtotales diarios
+  const groupedSalesByDate = useMemo(() => {
+    const groups = {};
+
+    filteredSales.forEach((sale) => {
+      const dateKey = getLocalDateString(sale.created_at);
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          date: dateKey,
+          sales: [],
+          totalAmount: 0,
+          completedCount: 0,
+          cancelledCount: 0
+        };
+      }
+      groups[dateKey].sales.push(sale);
+      if (sale.status === 'completed') {
+        groups[dateKey].totalAmount += Number(sale.total || 0);
+        groups[dateKey].completedCount++;
+      } else {
+        groups[dateKey].cancelledCount++;
+      }
+    });
+
+    return Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
+  }, [filteredSales]);
+
+  // Total de lo filtrado actualmente en pantalla
+  const currentFilteredTotal = useMemo(() => {
+    return filteredSales
       .filter((s) => s.status === 'completed')
-      .reduce((sum, s) => sum + Number(s.total), 0);
-  }, [sales]);
+      .reduce((sum, s) => sum + Number(s.total || 0), 0);
+  }, [filteredSales]);
 
-  const completedCount = useMemo(() => {
-    return sales.filter((s) => s.status === 'completed').length;
-  }, [sales]);
+  const toggleCollapseDate = (dateKey) => {
+    setCollapsedDates((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey]
+    }));
+  };
 
   const handleConfirmCancel = async (e) => {
     e.preventDefault();
@@ -89,152 +227,323 @@ export const SalesHistoryPage = () => {
     }
   };
 
+  const formatDateTitle = (dateStr) => {
+    if (dateStr === todayStr) return 'Hoy (' + formatDate(dateStr) + ')';
+    if (dateStr === yesterdayStr) return 'Ayer (' + formatDate(dateStr) + ')';
+    return formatDate(dateStr);
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
       {/* Cabecera */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
-          <History className="w-6 h-6 text-blue-700" />
-          Historial de Ventas & Facturas
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-500">
-          Registro de comprobantes emitidos, detalles y anulación con devolución de stock
-        </p>
-      </div>
-
-      {/* Resumen Métrico */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
-        <div className="p-4 bg-blue-900 text-white rounded-2xl shadow-sm">
-          <span className="text-[10px] sm:text-xs font-bold uppercase text-blue-200 block">
-            Total Facturado Activo
-          </span>
-          <p className="text-xl sm:text-2xl font-black mt-1">
-            {formatCurrency(totalCompletedSales)}
-          </p>
-          <p className="text-[11px] text-blue-200 mt-0.5">{completedCount} facturas válidas</p>
-        </div>
-
-        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
-          <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-400 block">
-            Total Facturas
-          </span>
-          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-            {sales.length} <span className="text-xs font-medium text-slate-500">docs.</span>
-          </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            {sales.filter((s) => s.status === 'cancelled').length} anuladas
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+            <History className="w-6 h-6 text-blue-700" />
+            Historial de Ventas & Facturas
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500">
+            Registro cronológico agrupado por fechas, totales del día y dashboard de ventas
           </p>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar por N° factura..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-600"
-          />
+      {/* 1. DASHBOARD DE TOTALES DE VENTAS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Total Hoy */}
+        <div className="p-4 bg-gradient-to-br from-blue-900 to-blue-800 text-white rounded-2xl shadow-sm border border-blue-700/50 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+                ⭐ Ventas de Hoy
+              </span>
+              <Calendar className="w-4 h-4 text-blue-300" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black mt-2 tracking-tight">
+              {formatCurrency(metrics.todayTotal)}
+            </p>
+          </div>
+          <p className="text-[11px] text-blue-200 mt-2 font-medium">
+            {metrics.todayCount} factura(s) hoy
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5 w-full sm:w-auto">
-          {['all', 'completed', 'cancelled'].map((st) => (
+        {/* Total Este Mes */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                📅 Este Mes
+              </span>
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-2 tracking-tight">
+              {formatCurrency(metrics.monthTotal)}
+            </p>
+          </div>
+          <p className="text-[11px] text-emerald-700 font-bold mt-2">
+            {metrics.monthCount} facturas este mes
+          </p>
+        </div>
+
+        {/* Total Histórico Acumulado */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                💰 Total Histórico
+              </span>
+              <DollarSign className="w-4 h-4 text-blue-700" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-blue-900 mt-2 tracking-tight">
+              {formatCurrency(metrics.grandTotal)}
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            {metrics.completedCount} facturas válidas
+          </p>
+        </div>
+
+        {/* Facturas Anuladas */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                🚫 Facturas Anuladas
+              </span>
+              <XCircle className="w-4 h-4 text-rose-500" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-rose-700 mt-2 tracking-tight">
+              {metrics.cancelledCount}
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            {sales.length} comprobantes totales
+          </p>
+        </div>
+      </div>
+
+      {/* 2. FILTROS AVANZADOS (Por Fecha, Estado y Búsqueda) */}
+      <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
+        {/* Selector de Rango de Fechas */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs font-bold">
+          <span className="text-slate-400 flex items-center gap-1 mr-1 shrink-0">
+            <Filter className="w-3.5 h-3.5" />
+            Período:
+          </span>
+          {[
+            { id: 'all', label: 'Todo el Historial' },
+            { id: 'today', label: 'Hoy' },
+            { id: 'yesterday', label: 'Ayer' },
+            { id: 'week', label: 'Esta Semana' },
+            { id: 'month', label: 'Este Mes' },
+            { id: 'custom', label: 'Personalizado' }
+          ].map((tab) => (
             <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                statusFilter === st
-                  ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                  : 'bg-white border-slate-200 text-slate-600'
+              key={tab.id}
+              onClick={() => setDateFilter(tab.id)}
+              className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition active:scale-95 ${
+                dateFilter === tab.id
+                  ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
               }`}
             >
-              {st === 'all' ? 'Todas' : st === 'completed' ? 'Válidas' : 'Anuladas'}
+              {tab.label}
             </button>
           ))}
         </div>
+
+        {/* Inputs para Rango de Fechas Personalizado */}
+        {dateFilter === 'custom' && (
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-600">Desde:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-600">Hasta:</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Búsqueda y Estado */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-100">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por N° factura o nota..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 shadow-xs focus:outline-none focus:border-blue-600"
+            />
+          </div>
+
+          <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+            {/* Filtro de Estado */}
+            <div className="flex items-center gap-1">
+              {['all', 'completed', 'cancelled'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                    statusFilter === st
+                      ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {st === 'all' ? 'Todas' : st === 'completed' ? 'Válidas' : 'Anuladas'}
+                </button>
+              ))}
+            </div>
+
+            {/* Total Filtrado Actual */}
+            <div className="hidden md:flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100 text-xs">
+              <span className="text-slate-600 font-medium">Subtotal Período:</span>
+              <strong className="text-blue-900 font-black">{formatCurrency(currentFilteredTotal)}</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Lista de Facturas */}
+      {/* 3. LISTA DE VENTAS AGRUPADAS POR FECHA */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
           <div className="animate-spin w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full mb-3" />
-          <p className="text-sm font-medium">Cargando facturas...</p>
+          <p className="text-sm font-medium">Cargando historial de ventas...</p>
         </div>
-      ) : filteredSales.length === 0 ? (
-        <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
-          No hay facturas que coincidan con la búsqueda.
+      ) : groupedSalesByDate.length === 0 ? (
+        <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 space-y-2">
+          <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
+          <p className="font-bold text-base text-slate-700">No hay ventas registradas</p>
+          <p className="text-xs text-slate-400">No se encontraron facturas con los filtros seleccionados.</p>
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {filteredSales.map((sale) => {
-            const isCancelled = sale.status === 'cancelled';
+        <div className="space-y-4">
+          {groupedSalesByDate.map((group) => {
+            const isCollapsed = collapsedDates[group.date];
 
             return (
               <div
-                key={sale.id}
-                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                key={group.date}
+                className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs transition-all"
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-black text-blue-900 text-base">
-                      #{sale.invoice_number}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                        isCancelled
-                          ? 'bg-rose-100 text-rose-700'
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}
-                    >
-                      {isCancelled ? <XCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-                      {isCancelled ? 'Anulada' : 'Completada'}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-400 mt-1">{formatDateTime(sale.created_at)}</p>
-
-                  <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-                    <span className="text-slate-500">
-                      Total: <strong className="text-slate-900 font-black text-sm">{formatCurrency(sale.total)}</strong>
-                    </span>
-                    <span className="text-slate-500">
-                      Pagó: <strong className="text-slate-700">{formatCurrency(sale.amount_paid)}</strong>
-                    </span>
-                    <span className="text-emerald-700 font-bold">
-                      Vuelto: {formatCurrency(sale.change_given)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Acciones */}
-                <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end">
-                  <button
-                    onClick={() => {
-                      setSelectedSale(sale);
-                      setIsDetailModalOpen(true);
-                    }}
-                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition active:scale-95"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-blue-700" />
-                    Detalle
-                  </button>
-
-                  {!isCancelled && (
-                    <button
-                      onClick={() => {
-                        setSaleToCancel(sale);
-                        setCancelReason('');
-                      }}
-                      className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs transition active:scale-95"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Anular
+                {/* Cabecera del Día (Totalizador Diario) */}
+                <div
+                  onClick={() => toggleCollapseDate(group.date)}
+                  className="p-4 bg-slate-50/90 hover:bg-slate-100/90 cursor-pointer border-b border-slate-200 flex items-center justify-between gap-3 transition"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <button className="p-1 text-slate-500 hover:text-slate-800 rounded-lg">
+                      {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
-                  )}
+                    <div>
+                      <h4 className="font-black text-sm sm:text-base text-slate-900 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-blue-700" />
+                        {formatDateTitle(group.date)}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {group.completedCount} venta(s) válidas
+                        {group.cancelledCount > 0 && ` • ${group.cancelledCount} anulada(s)`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Total del Día
+                    </span>
+                    <span className="text-base sm:text-lg font-black text-blue-900 font-mono">
+                      {formatCurrency(group.totalAmount)}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Listado de Facturas de ese Día */}
+                {!isCollapsed && (
+                  <div className="p-3 sm:p-4 space-y-2.5 divide-y sm:divide-y-0 divide-slate-100">
+                    {group.sales.map((sale) => {
+                      const isCancelled = sale.status === 'cancelled';
+
+                      return (
+                        <div
+                          key={sale.id}
+                          className="p-3.5 sm:p-4 bg-slate-50/50 hover:bg-blue-50/30 border border-slate-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-blue-900 text-sm sm:text-base">
+                                #{sale.invoice_number}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                  isCancelled
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {isCancelled ? <XCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+                                {isCancelled ? 'Anulada' : 'Completada'}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-400 mt-1">{formatDateTime(sale.created_at)}</p>
+
+                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+                              <span className="text-slate-500">
+                                Total: <strong className="text-slate-900 font-black text-sm">{formatCurrency(sale.total)}</strong>
+                              </span>
+                              <span className="text-slate-500">
+                                Pagó: <strong className="text-slate-700">{formatCurrency(sale.amount_paid)}</strong>
+                              </span>
+                              <span className="text-emerald-700 font-bold">
+                                Vuelto: {formatCurrency(sale.change_given)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Acciones */}
+                          <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end">
+                            <button
+                              onClick={() => {
+                                setSelectedSale(sale);
+                                setIsDetailModalOpen(true);
+                              }}
+                              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 transition active:scale-95 shadow-2xs"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-blue-700" />
+                              Detalle
+                            </button>
+
+                            {!isCancelled && (
+                              <button
+                                onClick={() => {
+                                  setSaleToCancel(sale);
+                                  setCancelReason('');
+                                }}
+                                className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs border border-rose-200 transition active:scale-95"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Anular
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
