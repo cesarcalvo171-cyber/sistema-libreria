@@ -59,13 +59,37 @@ export const financeService = {
     let totalCostOfGoodsSold = 0;
     let totalItemsSold = 0;
 
+    // Desglose por Línea de Negocio: Librería vs Impresiones
+    let libraryRevenue = 0;
+    let libraryCost = 0;
+    let libraryItemsCount = 0;
+
+    let printRevenue = 0;
+    let printCost = 0;
+    let printItemsCount = 0;
+
     (sales || []).forEach(sale => {
       totalRevenue += Number(sale.total) || 0;
       (sale.sale_items || []).forEach(item => {
         const qty = Number(item.quantity) || 0;
         const cost = Number(item.cost_price) || 0;
-        totalCostOfGoodsSold += (qty * cost);
+        const subtotal = Number(item.subtotal) || (qty * Number(item.unit_price) || 0);
+        const itemCostTotal = (qty * cost);
+
+        totalCostOfGoodsSold += itemCostTotal;
         totalItemsSold += qty;
+
+        const isPrint = item.item_type === 'print_service' || (!item.product_id && item.metadata?.service_type);
+
+        if (isPrint) {
+          printRevenue += subtotal;
+          printCost += itemCostTotal;
+          printItemsCount += qty;
+        } else {
+          libraryRevenue += subtotal;
+          libraryCost += itemCostTotal;
+          libraryItemsCount += qty;
+        }
       });
     });
 
@@ -97,6 +121,17 @@ export const financeService = {
       ? ((netProfit / totalRevenue) * 100)
       : 0;
 
+    // Ganancias y Márgenes por Línea
+    const libraryGrossProfit = libraryRevenue - libraryCost;
+    const libraryMarginPercentage = libraryRevenue > 0
+      ? ((libraryGrossProfit / libraryRevenue) * 100)
+      : 0;
+
+    const printGrossProfit = printRevenue - printCost;
+    const printMarginPercentage = printRevenue > 0
+      ? ((printGrossProfit / printRevenue) * 100)
+      : 0;
+
     return {
       period: { month, year },
       inventory: {
@@ -111,6 +146,24 @@ export const financeService = {
         totalCostOfGoodsSold,
         totalItemsSold,
         grossProfit
+      },
+      breakdown: {
+        library: {
+          revenue: libraryRevenue,
+          cost: libraryCost,
+          grossProfit: libraryGrossProfit,
+          marginPercentage: Number(libraryMarginPercentage.toFixed(1)),
+          itemsCount: libraryItemsCount,
+          sharePercentage: totalRevenue > 0 ? Number(((libraryRevenue / totalRevenue) * 100).toFixed(1)) : 0
+        },
+        printing: {
+          revenue: printRevenue,
+          cost: printCost,
+          grossProfit: printGrossProfit,
+          marginPercentage: Number(printMarginPercentage.toFixed(1)),
+          itemsCount: printItemsCount,
+          sharePercentage: totalRevenue > 0 ? Number(((printRevenue / totalRevenue) * 100).toFixed(1)) : 0
+        }
       },
       expenses: {
         totalExpenses,

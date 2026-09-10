@@ -8,7 +8,11 @@ import {
   PieChart,
   Percent,
   BarChart3,
-  ArrowDownRight
+  ArrowDownRight,
+  Printer,
+  BookOpen,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { financeService } from '../services/financeService';
 import { formatCurrency, getMonthName } from '../lib/formatters';
@@ -50,7 +54,7 @@ export const FinancePage = () => {
             Finanzas & Ganancias
           </h2>
           <p className="text-xs sm:text-sm text-slate-500">
-            Rentabilidad mensual, balance de ventas, costo y gastos
+            Rentabilidad mensual, balance de ventas, costo y desglose por línea de negocio
           </p>
         </div>
 
@@ -118,11 +122,104 @@ export const FinancePage = () => {
             </div>
 
             <p className="text-xs text-blue-200 border-t border-blue-800/80 pt-3">
-              Fórmula: Ventas ({formatCurrency(summary.sales.totalRevenue)}) - Costo Productos ({formatCurrency(summary.sales.totalCostOfGoodsSold)}) - Gastos ({formatCurrency(summary.expenses.totalExpenses)})
+              Fórmula: Ventas ({formatCurrency(summary.sales.totalRevenue)}) - Costo Insumos/Productos ({formatCurrency(summary.sales.totalCostOfGoodsSold)}) - Gastos ({formatCurrency(summary.expenses.totalExpenses)})
             </p>
           </div>
 
-          {/* 4 Métricas Clave */}
+          {/* SECCIÓN DESTACADA: DESGLOSE LIBRERÍA VS IMPRESIONES */}
+          {summary.breakdown && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Tarjeta 1: Línea Impresiones & Servicios */}
+              <div className="p-5 bg-gradient-to-br from-indigo-900 to-blue-900 text-white rounded-3xl shadow-md border border-indigo-700/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-indigo-800/80 text-cyan-300 rounded-xl">
+                      <Printer className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-base leading-tight">🖨️ Impresiones & Copias</h4>
+                      <p className="text-[10px] text-indigo-200">Servicios B/N, Color, Copias y Opalina</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 px-2.5 py-1 rounded-full">
+                    {summary.breakdown.printing.sharePercentage}% de ventas
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-indigo-800/80">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-indigo-200 block">Ventas</span>
+                    <p className="text-base sm:text-lg font-black text-white mt-0.5">
+                      {formatCurrency(summary.breakdown.printing.revenue)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-indigo-200 block">Costo Insumos</span>
+                    <p className="text-base sm:text-lg font-black text-amber-300 mt-0.5">
+                      {formatCurrency(summary.breakdown.printing.cost)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-cyan-200 block">Ganancia Bruta</span>
+                    <p className="text-base sm:text-lg font-black text-emerald-300 mt-0.5">
+                      {formatCurrency(summary.breakdown.printing.grossProfit)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-indigo-950/60 rounded-xl flex items-center justify-between text-xs text-indigo-200">
+                  <span>Margen de Ganancia: <strong className="text-emerald-300 font-bold">{summary.breakdown.printing.marginPercentage}%</strong></span>
+                  <span>Total Servicios: <strong className="text-white font-bold">{summary.breakdown.printing.itemsCount}</strong></span>
+                </div>
+              </div>
+
+              {/* Tarjeta 2: Línea Librería & Artículos Físicos */}
+              <div className="p-5 bg-white border border-slate-200 rounded-3xl shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-base text-slate-900 leading-tight">📚 Artículos de Librería</h4>
+                      <p className="text-[10px] text-slate-500">Útiles, cuadernos, papelería y productos</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-full">
+                    {summary.breakdown.library.sharePercentage}% de ventas
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Ventas</span>
+                    <p className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                      {formatCurrency(summary.breakdown.library.revenue)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Costo Prod.</span>
+                    <p className="text-base sm:text-lg font-black text-amber-700 mt-0.5">
+                      {formatCurrency(summary.breakdown.library.cost)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-emerald-600 block">Ganancia Bruta</span>
+                    <p className="text-base sm:text-lg font-black text-emerald-600 mt-0.5">
+                      {formatCurrency(summary.breakdown.library.grossProfit)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 rounded-xl flex items-center justify-between text-xs text-slate-600 border border-slate-100">
+                  <span>Margen de Ganancia: <strong className="text-emerald-700 font-bold">{summary.breakdown.library.marginPercentage}%</strong></span>
+                  <span>Unidades Vendidas: <strong className="text-slate-900 font-bold">{summary.breakdown.library.itemsCount}</strong></span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4 Métricas Globales */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Inversión en Inventario */}
             <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">

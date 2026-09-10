@@ -15,7 +15,9 @@ import {
   ChevronDown,
   ChevronRight,
   Filter,
-  Layers
+  Layers,
+  Printer,
+  BookOpen
 } from 'lucide-react';
 import { salesService } from '../services/salesService';
 import { formatCurrency, formatDateTime, formatDate } from '../lib/formatters';
@@ -157,6 +159,20 @@ export const SalesHistoryPage = () => {
     let completedCount = 0;
     let cancelledCount = 0;
 
+    // Desglose Histórico y Mensual por Línea
+    let totalPrintRev = 0;
+    let totalPrintCost = 0;
+    let totalLibRev = 0;
+    let totalLibCost = 0;
+
+    let monthPrintRev = 0;
+    let monthPrintCost = 0;
+    let monthLibRev = 0;
+    let monthLibCost = 0;
+
+    let todayPrintRev = 0;
+    let todayLibRev = 0;
+
     const currentYearMonth = todayStr.substring(0, 7);
 
     sales.forEach((s) => {
@@ -164,18 +180,53 @@ export const SalesHistoryPage = () => {
       const saleDateStr = getLocalDateString(s.created_at);
 
       if (isCompleted) {
-        grandTotal += Number(s.total || 0);
+        const saleTotal = Number(s.total || 0);
+        grandTotal += saleTotal;
         completedCount++;
 
-        if (saleDateStr === todayStr) {
-          todayTotal += Number(s.total || 0);
+        const isToday = saleDateStr === todayStr;
+        const isThisMonth = saleDateStr.startsWith(currentYearMonth);
+
+        if (isToday) {
+          todayTotal += saleTotal;
           todayCount++;
         }
 
-        if (saleDateStr.startsWith(currentYearMonth)) {
-          monthTotal += Number(s.total || 0);
+        if (isThisMonth) {
+          monthTotal += saleTotal;
           monthCount++;
         }
+
+        // Analizar ítems individuales
+        (s.sale_items || []).forEach((item) => {
+          const qty = Number(item.quantity) || 1;
+          const cost = (Number(item.cost_price) || 0) * qty;
+          const subtotal = Number(item.subtotal) || (qty * Number(item.unit_price || 0));
+
+          const isPrint = item.item_type === 'print_service' || (!item.product_id && item.metadata?.service_type);
+
+          if (isPrint) {
+            totalPrintRev += subtotal;
+            totalPrintCost += cost;
+            if (isThisMonth) {
+              monthPrintRev += subtotal;
+              monthPrintCost += cost;
+            }
+            if (isToday) {
+              todayPrintRev += subtotal;
+            }
+          } else {
+            totalLibRev += subtotal;
+            totalLibCost += cost;
+            if (isThisMonth) {
+              monthLibRev += subtotal;
+              monthLibCost += cost;
+            }
+            if (isToday) {
+              todayLibRev += subtotal;
+            }
+          }
+        });
       } else {
         cancelledCount++;
       }
@@ -184,9 +235,19 @@ export const SalesHistoryPage = () => {
     return {
       todayTotal,
       todayCount,
+      todayPrintRev,
+      todayLibRev,
       monthTotal,
       monthCount,
+      monthPrintRev,
+      monthPrintGrossProfit: monthPrintRev - monthPrintCost,
+      monthLibRev,
+      monthLibGrossProfit: monthLibRev - monthLibCost,
       grandTotal,
+      totalPrintRev,
+      totalPrintGrossProfit: totalPrintRev - totalPrintCost,
+      totalLibRev,
+      totalLibGrossProfit: totalLibRev - totalLibCost,
       completedCount,
       cancelledCount
     };
@@ -381,6 +442,87 @@ export const SalesHistoryPage = () => {
           <p className="text-[11px] text-slate-500 mt-2">
             {sales.length} comprobantes totales
           </p>
+        </div>
+      </div>
+
+      {/* DESGLOSE SEPARADO: IMPRESIONES VS LIBRERÍA (VENTAS Y GANANCIAS) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Tarjeta Impresiones */}
+        <div className="p-4 bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white border border-indigo-700/50 rounded-2xl shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-500/20 text-cyan-300 rounded-xl border border-indigo-400/30">
+                <Printer className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-black text-sm sm:text-base leading-tight">🖨️ Servicios de Impresión</h4>
+                <p className="text-[10px] text-indigo-200">B/N, Color, Copias y Opalina</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-500/30 border border-indigo-400/40 text-cyan-200 px-2 py-0.5 rounded-lg">
+              Histórico & Mes
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-indigo-800/80">
+            <div className="bg-indigo-950/50 p-2.5 rounded-xl border border-indigo-800/50">
+              <span className="text-[10px] uppercase font-bold text-indigo-300 block">Ventas (Total)</span>
+              <p className="text-base sm:text-lg font-black text-white mt-0.5">
+                {formatCurrency(metrics.totalPrintRev)}
+              </p>
+              <p className="text-[10px] text-indigo-300 mt-0.5 font-medium">
+                Mes: {formatCurrency(metrics.monthPrintRev)}
+              </p>
+            </div>
+            <div className="bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-500/30">
+              <span className="text-[10px] uppercase font-bold text-emerald-300 block">Ganancia Bruta</span>
+              <p className="text-base sm:text-lg font-black text-emerald-400 mt-0.5">
+                {formatCurrency(metrics.totalPrintGrossProfit)}
+              </p>
+              <p className="text-[10px] text-emerald-300/80 mt-0.5 font-medium">
+                Mes: {formatCurrency(metrics.monthPrintGrossProfit)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tarjeta Librería */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-black text-sm sm:text-base text-slate-900 leading-tight">📚 Artículos de Librería</h4>
+                <p className="text-[10px] text-slate-500">Útiles, papelería y productos físicos</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 rounded-lg">
+              Histórico & Mes
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Ventas (Total)</span>
+              <p className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                {formatCurrency(metrics.totalLibRev)}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                Mes: {formatCurrency(metrics.monthLibRev)}
+              </p>
+            </div>
+            <div className="bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100">
+              <span className="text-[10px] uppercase font-bold text-emerald-700 block">Ganancia Bruta</span>
+              <p className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">
+                {formatCurrency(metrics.totalLibGrossProfit)}
+              </p>
+              <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                Mes: {formatCurrency(metrics.monthLibGrossProfit)}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
