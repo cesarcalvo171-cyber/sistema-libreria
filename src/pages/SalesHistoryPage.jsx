@@ -203,7 +203,19 @@ export const SalesHistoryPage = () => {
           const cost = (Number(item.cost_price) || 0) * qty;
           const subtotal = Number(item.subtotal) || (qty * Number(item.unit_price || 0));
 
-          const isPrint = item.item_type === 'print_service' || (!item.product_id && item.metadata?.service_type);
+          const name = (item.product_name || '').toLowerCase();
+          const isPrint =
+            item.item_type === 'print_service' ||
+            (!item.product_id && item.metadata?.service_type) ||
+            name.includes('impresion') ||
+            name.includes('impresión') ||
+            name.includes('copia') ||
+            name.includes('cedula') ||
+            name.includes('cédula') ||
+            name.includes('escaner') ||
+            name.includes('escaneo') ||
+            name.includes('plastificado') ||
+            name.includes('laminado');
 
           if (isPrint) {
             totalPrintRev += subtotal;

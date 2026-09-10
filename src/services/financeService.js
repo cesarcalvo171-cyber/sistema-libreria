@@ -43,10 +43,15 @@ export const financeService = {
         total,
         created_at,
         sale_items (
+          id,
+          product_id,
+          product_name,
           cost_price,
           unit_price,
           quantity,
-          subtotal
+          subtotal,
+          item_type,
+          metadata
         )
       `)
       .eq('status', 'completed')
@@ -79,7 +84,19 @@ export const financeService = {
         totalCostOfGoodsSold += itemCostTotal;
         totalItemsSold += qty;
 
-        const isPrint = item.item_type === 'print_service' || (!item.product_id && item.metadata?.service_type);
+        const name = (item.product_name || '').toLowerCase();
+        const isPrint =
+          item.item_type === 'print_service' ||
+          (!item.product_id && item.metadata?.service_type) ||
+          name.includes('impresion') ||
+          name.includes('impresión') ||
+          name.includes('copia') ||
+          name.includes('cedula') ||
+          name.includes('cédula') ||
+          name.includes('escaner') ||
+          name.includes('escaneo') ||
+          name.includes('plastificado') ||
+          name.includes('laminado');
 
         if (isPrint) {
           printRevenue += subtotal;
