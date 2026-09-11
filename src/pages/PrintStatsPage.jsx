@@ -12,7 +12,10 @@ import {
   X,
   Save,
   CheckCircle2,
-  Boxes
+  Boxes,
+  Camera,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { printService } from '../services/printService';
 import { formatCurrency, formatDateTime } from '../lib/formatters';
@@ -27,6 +30,16 @@ export const PrintStatsPage = () => {
   const [isRatesModalOpen, setIsRatesModalOpen] = useState(false);
   const [rates, setRates] = useState([]);
   const [editingRates, setEditingRates] = useState([]);
+
+  // Estado para crear nueva tarifa
+  const [isAddingRate, setIsAddingRate] = useState(false);
+  const [newRateForm, setNewRateForm] = useState({
+    name: '',
+    paper_type: 'carta',
+    sale_price: '',
+    cost_price: '',
+    estimated_ink_ml: '0.05'
+  });
 
   const loadData = async () => {
     try {
@@ -63,7 +76,9 @@ export const PrintStatsPage = () => {
     e.preventDefault();
     try {
       for (const rate of editingRates) {
-        await printService.updateRate(rate.id, rate);
+        if (rate.id) {
+          await printService.updateRate(rate.id, rate);
+        }
       }
       toast.success('Tarifas de impresión actualizadas con éxito');
       setIsRatesModalOpen(false);
@@ -72,6 +87,51 @@ export const PrintStatsPage = () => {
     } catch (err) {
       console.error(err);
       toast.error('Error al guardar tarifas');
+    }
+  };
+
+  const handleCreateNewRate = async (e) => {
+    e.preventDefault();
+    if (!newRateForm.name || !newRateForm.sale_price) {
+      toast.warning('Ingresa al menos el nombre y precio de venta');
+      return;
+    }
+
+    try {
+      await printService.createRate({
+        name: newRateForm.name,
+        service_type: `custom_${newRateForm.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`,
+        paper_type: newRateForm.paper_type,
+        sale_price: Number(newRateForm.sale_price) || 0,
+        cost_price: Number(newRateForm.cost_price) || 0,
+        estimated_ink_ml: Number(newRateForm.estimated_ink_ml) || 0.05
+      });
+
+      toast.success(`Tarifa "${newRateForm.name}" agregada con éxito`);
+      setNewRateForm({
+        name: '',
+        paper_type: 'carta',
+        sale_price: '',
+        cost_price: '',
+        estimated_ink_ml: '0.05'
+      });
+      setIsAddingRate(false);
+      await loadRates();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al agregar tarifa');
+    }
+  };
+
+  const handleDeleteRate = async (id, name) => {
+    if (!window.confirm(`¿Eliminar la tarifa "${name}"?`)) return;
+    try {
+      await printService.deleteRate(id);
+      toast.success(`Tarifa "${name}" eliminada`);
+      await loadRates();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al eliminar tarifa');
     }
   };
 
@@ -158,7 +218,7 @@ export const PrintStatsPage = () => {
           </div>
 
           {/* 2. Grid con las Métricas de Insumos y Conteo */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             {/* Métrica 1: Impresiones B/N */}
             <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between text-slate-400">
@@ -195,52 +255,64 @@ export const PrintStatsPage = () => {
               <p className="text-[11px] text-slate-500 mt-0.5">fotocopias</p>
             </div>
 
-            {/* Métrica 4: Hojas Carta */}
+            {/* Métrica 4: Fotos Impresas */}
+            <div className="p-4 bg-white border border-purple-200 rounded-2xl shadow-xs bg-purple-50/20">
+              <div className="flex items-center justify-between text-purple-700">
+                <span className="text-[10px] font-bold uppercase block">4. Fotos</span>
+                <Camera className="w-4 h-4 text-purple-600" />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-purple-900 mt-1">
+                {stats.metrics.totalPhotos || 0}
+              </p>
+              <p className="text-[11px] text-purple-600 font-medium mt-0.5">fotos impresas</p>
+            </div>
+
+            {/* Métrica 5: Hojas Carta */}
             <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between text-emerald-600">
-                <span className="text-[10px] font-bold uppercase block">4. Hojas Carta</span>
+                <span className="text-[10px] font-bold uppercase block">5. Hojas Carta</span>
                 <Layers className="w-4 h-4" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-emerald-700 mt-1">
                 {stats.metrics.cartaSheetsUsed}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">hojas bond carta</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">bond carta</p>
             </div>
 
-            {/* Métrica 5: Hojas Legal */}
+            {/* Métrica 6: Hojas Legal */}
             <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between text-amber-600">
-                <span className="text-[10px] font-bold uppercase block">5. Hojas Legal</span>
+                <span className="text-[10px] font-bold uppercase block">6. Hojas Legal</span>
                 <Layers className="w-4 h-4" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-amber-700 mt-1">
                 {stats.metrics.legalSheetsUsed}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">hojas bond legal</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">bond legal</p>
             </div>
 
-            {/* Métrica 6: Hojas Opalina */}
+            {/* Métrica 7: Hojas Opalina */}
             <div className="p-4 bg-white border border-indigo-200 rounded-2xl shadow-xs bg-indigo-50/20">
               <div className="flex items-center justify-between text-indigo-600">
-                <span className="text-[10px] font-bold uppercase block">6. Hojas Opalina</span>
+                <span className="text-[10px] font-bold uppercase block">7. Hojas Opalina</span>
                 <Layers className="w-4 h-4 text-indigo-600" />
               </div>
               <p className="text-xl sm:text-2xl font-black text-indigo-900 mt-1">
                 {stats.metrics.opalinaSheetsUsed || 0}
               </p>
-              <p className="text-[11px] text-indigo-600 font-medium mt-0.5">hojas opalina</p>
+              <p className="text-[11px] text-indigo-600 font-medium mt-0.5">opalina</p>
             </div>
 
-            {/* Métrica 7: Tinta Consumida */}
-            <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
-              <div className="flex items-center justify-between text-purple-600">
-                <span className="text-[10px] font-bold uppercase block">7. Tinta Est.</span>
-                <Droplets className="w-4 h-4" />
+            {/* Métrica 8: Hojas Fotográficas */}
+            <div className="p-4 bg-white border border-purple-200 rounded-2xl shadow-xs bg-purple-50/30">
+              <div className="flex items-center justify-between text-purple-700">
+                <span className="text-[10px] font-bold uppercase block">8. Hojas Foto</span>
+                <Layers className="w-4 h-4 text-purple-700" />
               </div>
-              <p className="text-xl sm:text-2xl font-black text-purple-700 mt-1">
-                {stats.metrics.inkConsumedMl} <span className="text-xs font-normal">ml</span>
+              <p className="text-xl sm:text-2xl font-black text-purple-900 mt-1">
+                {stats.metrics.fotoSheetsUsed || 0}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">consumo estimado</p>
+              <p className="text-[11px] text-purple-700 font-medium mt-0.5">papel foto</p>
             </div>
           </div>
 
@@ -262,41 +334,55 @@ export const PrintStatsPage = () => {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {stats.logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/70 transition"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">
-                          {log.service_type === 'print_bn'
-                            ? 'Impresión B/N'
-                            : log.service_type === 'print_color'
-                            ? 'Impresión Color'
-                            : log.service_type === 'copy_bn'
-                            ? 'Copia B/N'
-                            : 'Copia Color'}
+                {stats.logs.map((log) => {
+                  const sType = log.service_type || '';
+                  const serviceTitle =
+                    sType === 'photo_13x9' ? 'Foto 12.8 x 9.1 cm'
+                    : sType === 'photo_18x13' ? 'Foto 18.2 x 12.8 cm'
+                    : sType === 'photo_21x15' ? 'Foto 21 x 14.8 cm (Media Carta)'
+                    : sType === 'photo_carta' ? 'Foto Tamaño Carta'
+                    : sType === 'copy_cedula' ? 'Copia de Cédula (Ambos Lados)'
+                    : sType === 'print_opalina' ? 'Impresión Opalina Color'
+                    : sType === 'print_bn' ? 'Impresión B/N'
+                    : sType === 'print_color' ? 'Impresión Color'
+                    : sType === 'copy_bn' ? 'Copia B/N'
+                    : sType === 'copy_color' ? 'Copia Color'
+                    : log.service_type;
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/70 transition"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">
+                            {serviceTitle}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${
+                            sType.startsWith('photo_') || log.paper_type === 'foto'
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : 'bg-blue-50 text-blue-700'
+                          }`}>
+                            {log.paper_type} {log.is_duplex ? '• Doble Faz' : ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {log.pages_count} {sType.startsWith('photo_') ? 'foto(s)' : 'págs'} • {log.sheets_used} hoja(s) • ~{log.ink_used_estimate} ml tinta • {formatDateTime(log.created_at)}
+                        </p>
+                      </div>
+
+                      <div className="text-left sm:text-right">
+                        <span className="font-black text-sm text-blue-900">
+                          {formatCurrency(log.subtotal)}
                         </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 uppercase">
-                          {log.paper_type} {log.is_duplex ? '• Doble Faz' : ''}
+                        <span className="text-[11px] text-slate-400 block">
+                          ({formatCurrency(log.unit_price)} c/u)
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {log.pages_count} págs • {log.sheets_used} hojas • ~{log.ink_used_estimate} ml tinta • {formatDateTime(log.created_at)}
-                      </p>
                     </div>
-
-                    <div className="text-left sm:text-right">
-                      <span className="font-black text-sm text-blue-900">
-                        {formatCurrency(log.subtotal)}
-                      </span>
-                      <span className="text-[11px] text-slate-400 block">
-                        ({formatCurrency(log.unit_price)} c/u)
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -307,7 +393,7 @@ export const PrintStatsPage = () => {
       {isRatesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white">
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white shrink-0">
               <div className="flex items-center gap-2">
                 <Settings2 className="w-5 h-5 text-blue-200" />
                 <h3 className="font-bold text-base">Tarifas y Costos de Impresión</h3>
@@ -320,74 +406,173 @@ export const PrintStatsPage = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveRates} className="p-6 overflow-y-auto space-y-4 flex-1">
-              <p className="text-xs text-slate-500 leading-relaxed bg-blue-50 p-3 rounded-xl border border-blue-100">
-                Ajusta los <strong>precios de venta al público</strong> y los <strong>costos de insumos (papel + tinta)</strong> para cada servicio.
-              </p>
-
-              <div className="space-y-3">
-                {editingRates.map((rate, idx) => (
-                  <div
-                    key={rate.id || idx}
-                    className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex-1">
-                      <h5 className="font-bold text-sm text-slate-900">{rate.name}</h5>
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">
-                        {rate.paper_type}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block">
-                          Costo (C$)
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={rate.cost_price}
-                          onChange={(e) => handleRateChange(idx, 'cost_price', e.target.value)}
-                          className="w-20 px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] font-bold text-blue-700 block">
-                          Venta (C$)
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={rate.sale_price}
-                          onChange={(e) => handleRateChange(idx, 'sale_price', e.target.value)}
-                          className="w-20 px-2.5 py-1.5 bg-white border border-blue-300 rounded-xl text-xs font-black text-blue-900"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200">
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-500 leading-relaxed bg-blue-50 p-3 rounded-xl border border-blue-100 flex-1">
+                  Ajusta los <strong>precios de venta al público</strong> y los <strong>costos de insumos (papel + tinta)</strong> para cada servicio.
+                </p>
                 <button
                   type="button"
-                  onClick={() => setIsRatesModalOpen(false)}
-                  className="px-4 py-2 text-sm text-slate-500 font-semibold"
+                  onClick={() => setIsAddingRate(!isAddingRate)}
+                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 shrink-0 transition active:scale-95 shadow-xs"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-sm shadow-md shadow-blue-700/20 transition flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  Guardar Tarifas
+                  <Plus className="w-4 h-4" />
+                  <span>{isAddingRate ? 'Cerrar' : '+ Agregar Tarifa'}</span>
                 </button>
               </div>
-            </form>
+
+              {/* Formulario para Crear Nueva Tarifa */}
+              {isAddingRate && (
+                <form onSubmit={handleCreateNewRate} className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-black text-emerald-900 uppercase">Nueva Tarifa / Servicio</h5>
+                    <button type="button" onClick={() => setIsAddingRate(false)} className="text-emerald-700 text-xs">✕</button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-900 block mb-1">Nombre del Servicio</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Foto 10x15, Plastificado..."
+                        value={newRateForm.name}
+                        onChange={(e) => setNewRateForm({ ...newRateForm, name: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-900 block mb-1">Tipo de Papel</label>
+                      <select
+                        value={newRateForm.paper_type}
+                        onChange={(e) => setNewRateForm({ ...newRateForm, paper_type: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900"
+                      >
+                        <option value="carta">Carta</option>
+                        <option value="legal">Legal / Oficio</option>
+                        <option value="foto">Papel Foto</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">Costo Insumo (C$)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={newRateForm.cost_price}
+                        onChange={(e) => setNewRateForm({ ...newRateForm, cost_price: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-800 block mb-1">Precio Venta (C$)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={newRateForm.sale_price}
+                        onChange={(e) => setNewRateForm({ ...newRateForm, sale_price: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-emerald-400 rounded-xl text-xs font-black text-emerald-900"
+                        required
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="submit"
+                        className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs transition active:scale-95"
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {/* Lista de Tarifas Existentes Editables */}
+              <form onSubmit={handleSaveRates} className="space-y-3">
+                <div className="space-y-2.5">
+                  {editingRates.map((rate, idx) => (
+                    <div
+                      key={rate.id || idx}
+                      className="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {rate.service_type?.startsWith('photo_') || rate.paper_type === 'foto' ? (
+                            <Camera className="w-4 h-4 text-purple-600 shrink-0" />
+                          ) : null}
+                          <h5 className="font-bold text-xs sm:text-sm text-slate-900 truncate">{rate.name}</h5>
+                        </div>
+                        <span className="text-[10px] text-slate-500 uppercase font-semibold block mt-0.5">
+                          {rate.paper_type}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-500 block">
+                            Costo (C$)
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={rate.cost_price}
+                            onChange={(e) => handleRateChange(idx, 'cost_price', e.target.value)}
+                            className="w-18 px-2 py-1 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 text-center"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-blue-700 block">
+                            Venta (C$)
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={rate.sale_price}
+                            onChange={(e) => handleRateChange(idx, 'sale_price', e.target.value)}
+                            className="w-18 px-2 py-1 bg-white border border-blue-300 rounded-xl text-xs font-black text-blue-900 text-center"
+                          />
+                        </div>
+
+                        {rate.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRate(rate.id, rate.name)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition active:scale-95"
+                            title="Eliminar tarifa"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setIsRatesModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-500"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-700/20 transition flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

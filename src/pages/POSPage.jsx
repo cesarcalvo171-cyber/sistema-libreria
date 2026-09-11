@@ -134,12 +134,15 @@ export const POSPage = () => {
           const prevQty = i.quantity || 1;
           const basePages = Math.max(1, Math.round((i.pages_count || 1) / prevQty));
           const newPages = basePages * newQty;
-          const newSheets = i.is_duplex ? Math.ceil(newPages / 2) : newPages;
+          const isSmallPhoto = i.service_type === 'photo_13x9' || i.service_type === 'photo_18x13';
+          const isPhotoService = i.service_type?.startsWith('photo_');
+          const newSheets = isPhotoService ? (isSmallPhoto ? 1 : newPages) : (i.is_duplex ? Math.ceil(newPages / 2) : newPages);
           const baseInk = (i.ink_used_estimate || 0.05) / prevQty;
           const newInk = Number((baseInk * newQty).toFixed(2));
 
-          // Actualizar etiqueta del nombre si tiene [X págs]
-          const updatedName = i.name.replace(/\[\d+\s+[^\]]+\]/, `[${newPages} ${i.service_type === 'copy_cedula' ? 'cédula(s)' : 'págs'}]`);
+          // Actualizar etiqueta del nombre si tiene [X págs/fotos/cédulas]
+          const unitLabel = isPhotoService ? 'foto(s)' : i.service_type === 'copy_cedula' ? 'cédula(s)' : 'págs';
+          const updatedName = i.name.replace(/\[\d+\s+[^\]]+\]/, `[${newPages} ${unitLabel}]`);
 
           return {
             ...i,

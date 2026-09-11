@@ -4,6 +4,7 @@ import { printService } from './printService';
 export const salesService = {
   // Helper para encontrar el producto de papel adecuado
   findPaperProduct(productsList, paperType, serviceType = '') {
+    const isFoto = paperType.toLowerCase().includes('foto') || serviceType.startsWith('photo_') || serviceType.includes('foto');
     const isOpalina = paperType.toLowerCase().includes('opalina') || serviceType === 'print_opalina';
     const isCarta = paperType.toLowerCase() === 'carta';
     const invalidKeywords = ['foamy', 'fomi', 'sobre', 'folder', 'carpeta', 'crayola', 'creppe', 'silicon', 'plastilina'];
@@ -12,6 +13,14 @@ export const salesService = {
       const n = p.name.toLowerCase();
       return !invalidKeywords.some(k => n.includes(k));
     });
+
+    if (isFoto) {
+      return (
+        filtered.find(p => p.name.toLowerCase().includes('fotogr') || p.name.toLowerCase().includes('foto')) ||
+        (productsList || []).find(p => p.name.toLowerCase().includes('fotogr') || p.name.toLowerCase().includes('foto')) ||
+        null
+      );
+    }
 
     if (isOpalina) {
       return (
@@ -22,22 +31,23 @@ export const salesService = {
     }
 
     if (isCarta) {
-      // 1. Prioridad: "Resma de papel Bond Carta", "Hojas de Papel Carta", etc. (excluyendo opalina)
-      const nonOpalina = filtered.filter(p => !p.name.toLowerCase().includes('opalina'));
+      // 1. Prioridad: "Resma de papel Bond Carta", "Hojas de Papel Carta", etc. (excluyendo opalina y foto)
+      const nonSpecial = filtered.filter(p => !p.name.toLowerCase().includes('opalina') && !p.name.toLowerCase().includes('foto') && !p.name.toLowerCase().includes('fotogr'));
       return (
-        nonOpalina.find(p => p.name.toLowerCase().includes('papel') && p.name.toLowerCase().includes('carta')) ||
-        nonOpalina.find(p => p.name.toLowerCase().includes('resma') && p.name.toLowerCase().includes('carta')) ||
-        nonOpalina.find(p => p.name.toLowerCase().includes('hoja') && p.name.toLowerCase().includes('carta')) ||
-        nonOpalina.find(p => p.name.toLowerCase().includes('carta')) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('papel') && p.name.toLowerCase().includes('carta')) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('resma') && p.name.toLowerCase().includes('carta')) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('hoja') && p.name.toLowerCase().includes('carta')) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('carta')) ||
         null
       );
     } else {
       // 1. Prioridad: "Hojas de Papel Legal", "Resma Legal", "Papel Oficio", etc.
+      const nonSpecial = filtered.filter(p => !p.name.toLowerCase().includes('opalina') && !p.name.toLowerCase().includes('foto') && !p.name.toLowerCase().includes('fotogr'));
       return (
-        filtered.find(p => p.name.toLowerCase().includes('papel') && (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))) ||
-        filtered.find(p => p.name.toLowerCase().includes('resma') && (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))) ||
-        filtered.find(p => p.name.toLowerCase().includes('hoja') && (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))) ||
-        filtered.find(p => p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio')) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('papel') && (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('resma') && (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('hoja') && (p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio'))) ||
+        nonSpecial.find(p => p.name.toLowerCase().includes('legal') || p.name.toLowerCase().includes('oficio')) ||
         null
       );
     }
