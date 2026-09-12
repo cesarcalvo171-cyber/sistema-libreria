@@ -181,10 +181,12 @@ export const printService = {
     let totalColorPrints = 0;
     let totalCopies = 0;
     let totalPhotos = 0;
+    let totalStickers = 0;
     let cartaSheetsUsed = 0;
     let legalSheetsUsed = 0;
     let opalinaSheetsUsed = 0;
     let fotoSheetsUsed = 0;
+    let stickerSheetsUsed = 0;
     let inkConsumedMl = 0;
     let dailyRevenue = 0;
     let dailyCost = 0;
@@ -201,17 +203,22 @@ export const printService = {
       inkConsumedMl += ink;
 
       const sType = log.service_type || '';
-      const isFoto = sType.startsWith('photo_') || log.paper_type === 'foto';
+      const pType = (log.paper_type || '').toLowerCase();
+      const isFoto = sType.startsWith('photo_') || pType === 'foto';
+      const isSticker = sType.startsWith('sticker_') || sType.includes('sticker') || pType === 'sticker' || pType === 'adhesivo';
 
-      if (isFoto) {
+      if (isSticker) {
+        stickerSheetsUsed += sheets;
+        totalStickers += pages;
+      } else if (isFoto) {
         fotoSheetsUsed += sheets;
         totalPhotos += pages;
-      } else if (sType === 'print_opalina') {
+      } else if (sType === 'print_opalina' || pType === 'opalina') {
         opalinaSheetsUsed += sheets;
         totalColorPrints += pages;
-      } else if (log.paper_type === 'carta') {
+      } else if (pType === 'carta') {
         cartaSheetsUsed += sheets;
-      } else if (log.paper_type === 'legal') {
+      } else if (pType === 'legal') {
         legalSheetsUsed += sheets;
       }
 
@@ -231,10 +238,12 @@ export const printService = {
         totalColorPrints,
         totalCopies,
         totalPhotos,
+        totalStickers,
         cartaSheetsUsed,
         legalSheetsUsed,
         opalinaSheetsUsed,
         fotoSheetsUsed,
+        stickerSheetsUsed,
         inkConsumedMl: Number(inkConsumedMl.toFixed(2)),
         dailyRevenue,
         dailyProfit: dailyRevenue - dailyCost

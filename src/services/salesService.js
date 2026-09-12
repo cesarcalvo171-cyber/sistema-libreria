@@ -4,6 +4,7 @@ import { printService } from './printService';
 export const salesService = {
   // Helper para encontrar el producto de papel adecuado
   findPaperProduct(productsList, paperType, serviceType = '') {
+    const isSticker = paperType.toLowerCase().includes('adhesiv') || paperType.toLowerCase().includes('sticker') || serviceType.includes('sticker') || serviceType.includes('adhesiv');
     const isFoto = paperType.toLowerCase().includes('foto') || serviceType.startsWith('photo_') || serviceType.includes('foto');
     const isOpalina = paperType.toLowerCase().includes('opalina') || serviceType === 'print_opalina';
     const isCarta = paperType.toLowerCase() === 'carta';
@@ -13,6 +14,14 @@ export const salesService = {
       const n = p.name.toLowerCase();
       return !invalidKeywords.some(k => n.includes(k));
     });
+
+    if (isSticker) {
+      return (
+        filtered.find(p => p.name.toLowerCase().includes('adhesiv') || p.name.toLowerCase().includes('sticker')) ||
+        (productsList || []).find(p => p.name.toLowerCase().includes('adhesiv') || p.name.toLowerCase().includes('sticker')) ||
+        null
+      );
+    }
 
     if (isFoto) {
       return (
@@ -31,8 +40,8 @@ export const salesService = {
     }
 
     if (isCarta) {
-      // 1. Prioridad: "Resma de papel Bond Carta", "Hojas de Papel Carta", etc. (excluyendo opalina y foto)
-      const nonSpecial = filtered.filter(p => !p.name.toLowerCase().includes('opalina') && !p.name.toLowerCase().includes('foto') && !p.name.toLowerCase().includes('fotogr'));
+      // 1. Prioridad: "Resma de papel Bond Carta", "Hojas de Papel Carta", etc. (excluyendo especiales)
+      const nonSpecial = filtered.filter(p => !p.name.toLowerCase().includes('opalina') && !p.name.toLowerCase().includes('foto') && !p.name.toLowerCase().includes('fotogr') && !p.name.toLowerCase().includes('adhesiv') && !p.name.toLowerCase().includes('sticker'));
       return (
         nonSpecial.find(p => p.name.toLowerCase().includes('papel') && p.name.toLowerCase().includes('carta')) ||
         nonSpecial.find(p => p.name.toLowerCase().includes('resma') && p.name.toLowerCase().includes('carta')) ||

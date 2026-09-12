@@ -93,6 +93,9 @@ export const financeService = {
           name.includes('copia') ||
           name.includes('cedula') ||
           name.includes('cédula') ||
+          name.includes('foto') ||
+          name.includes('sticker') ||
+          name.includes('adhesiv') ||
           name.includes('escaner') ||
           name.includes('escaneo') ||
           name.includes('plastificado') ||
