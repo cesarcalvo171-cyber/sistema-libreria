@@ -97,13 +97,20 @@ export const salesService = {
       const isPrintService = item.item_type === 'print_service' || item.is_service;
 
       if (isPrintService) {
+        const sData = item.service_data || item.metadata || {};
         const itemQuantity = Number(item.quantity) || 1;
-        const totalPages = (Number(item.pages_count) || 1) * (item.pages_count ? 1 : itemQuantity);
-        const totalSheets = Number(item.sheets_used) || totalPages;
-        const totalInk = Number(item.ink_used_estimate) || 0;
+        const serviceType = sData.service_type || item.service_type || 'print_bn';
+        const paperType = (sData.paper_type || item.paper_type || 'carta').toLowerCase();
+        const isDuplex = Boolean(sData.is_duplex !== undefined ? sData.is_duplex : item.is_duplex);
+        const totalPages = Number(sData.pages_count || item.pages_count || itemQuantity);
+        const totalSheets = Number(sData.sheets_used !== undefined ? sData.sheets_used : (item.sheets_used !== undefined ? item.sheets_used : totalPages));
+        const totalInk = Number(sData.ink_used_ml !== undefined ? sData.ink_used_ml : (item.ink_used_estimate !== undefined ? item.ink_used_estimate : 0));
 
         printItems.push({
           ...item,
+          service_type: serviceType,
+          paper_type: paperType,
+          is_duplex: isDuplex,
           pages_count: totalPages,
           sheets_used: totalSheets,
           ink_used_estimate: totalInk
@@ -121,9 +128,9 @@ export const salesService = {
             subtotal: Number(itemQuantity * item.sale_price),
             item_type: 'print_service',
             metadata: {
-              service_type: item.service_type,
-              paper_type: item.paper_type,
-              is_duplex: item.is_duplex,
+              service_type: serviceType,
+              paper_type: paperType,
+              is_duplex: isDuplex,
               pages_count: totalPages,
               sheets_used: totalSheets,
               ink_used_estimate: totalInk
@@ -133,7 +140,6 @@ export const salesService = {
 
         // DESCONTAR STOCK DE HOJAS FÍSICAS UTILIZADAS EN LA IMPRESIÓN/COPIA
         const sheetsCount = totalSheets;
-        const paperType = (item.paper_type || 'carta').toLowerCase();
 
         try {
           const { data: allProds } = await supabase
@@ -141,7 +147,7 @@ export const salesService = {
             .select('*')
             .eq('is_active', true);
 
-          const targetPaper = this.findPaperProduct(allProds, paperType, item.service_type);
+          const targetPaper = this.findPaperProduct(allProds, paperType, serviceType);
 
           if (targetPaper) {
             const currentStock = Number(targetPaper.stock) || 0;

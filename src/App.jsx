@@ -7,6 +7,7 @@ import { InventoryPage } from './pages/InventoryPage';
 import { FinancePage } from './pages/FinancePage';
 import { ExpensesPage } from './pages/ExpensesPage';
 import { SalesHistoryPage } from './pages/SalesHistoryPage';
+import { CashDrawerPage } from './pages/CashDrawerPage';
 
 export function App() {
   return (
@@ -15,6 +16,9 @@ export function App() {
         <Route path="/" element={<Layout />}>
           {/* Módulo 1: Facturación (POS) */}
           <Route index element={<POSPage />} />
+
+          {/* Módulo de Control de Caja & Retiros */}
+          <Route path="caja" element={<CashDrawerPage />} />
 
           {/* Módulo de Impresiones & Control de Insumos */}
           <Route path="impresiones" element={<PrintStatsPage />} />

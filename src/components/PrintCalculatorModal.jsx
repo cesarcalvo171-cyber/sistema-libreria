@@ -14,9 +14,11 @@ import {
   Zap,
   Sparkles,
   Layers,
-  HelpCircle
+  HelpCircle,
+  AlertCircle
 } from 'lucide-react';
 import { printService } from '../services/printService';
+import { productsService } from '../services/productsService';
 import { formatCurrency } from '../lib/formatters';
 import { toast } from 'sonner';
 
@@ -69,6 +71,7 @@ const STICKER_TIERS = [
 export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
   const [activeTab, setActiveTab] = useState('prints'); // 'prints', 'stickers', 'direct'
   const [rates, setRates] = useState([]);
+  const [productsList, setProductsList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // --- TAB 1: Impresiones Clásicas ---
@@ -93,7 +96,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
 
   useEffect(() => {
     if (isOpen) {
-      loadRates();
+      loadInitialData();
       setPagesCount(1);
       setCustomUnitPrice('');
       setStickerQty(10);
@@ -105,15 +108,47 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
     }
   }, [isOpen]);
 
-  const loadRates = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
-      const data = await printService.getRates();
-      setRates(data);
+      const [dataRates, dataProds] = await Promise.all([
+        printService.getRates(),
+        productsService.getAll().catch(() => [])
+      ]);
+      setRates(dataRates || []);
+      setProductsList(dataProds || []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper para verificar stock actual del papel seleccionado
+  const getPaperStock = (pType, sType = '') => {
+    const isSticker = pType === 'adhesivo' || pType === 'sticker' || sType.includes('sticker');
+    const isFoto = pType === 'foto' || sType.startsWith('photo_');
+    const isOpalina = pType === 'opalina' || sType === 'print_opalina';
+    const isCarta = pType === 'carta';
+
+    if (isSticker) {
+      const p = productsList.find(pr => pr.name.toLowerCase().includes('adhesiv') || pr.name.toLowerCase().includes('sticker'));
+      return p ? p.stock : null;
+    }
+    if (isFoto) {
+      const p = productsList.find(pr => pr.name.toLowerCase().includes('fotogr') || pr.name.toLowerCase().includes('foto'));
+      return p ? p.stock : null;
+    }
+    if (isOpalina) {
+      const p = productsList.find(pr => pr.name.toLowerCase().includes('opalina'));
+      return p ? p.stock : null;
+    }
+    if (isCarta) {
+      const p = productsList.find(pr => pr.name.toLowerCase().includes('papel') && pr.name.toLowerCase().includes('carta'));
+      return p ? p.stock : null;
+    } else {
+      const p = productsList.find(pr => pr.name.toLowerCase().includes('legal') || pr.name.toLowerCase().includes('oficio'));
+      return p ? p.stock : null;
     }
   };
 
@@ -624,20 +659,45 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
               </div>
 
               {/* Insumos deducidos */}
-              <div className="grid grid-cols-2 gap-2 text-xs p-2.5 bg-blue-50/70 border border-blue-100 rounded-2xl">
-                <div>
-                  <span className="text-slate-500 text-[10px] block">Hojas a Descontar:</span>
-                  <strong className="text-slate-900 text-xs">
-                    {printSheetsUsed} hoja{printSheetsUsed > 1 ? 's' : ''} ({isPhotoService ? 'FOTOGRÁFICO' : serviceType === 'print_opalina' ? 'OPALINA' : paperType.toUpperCase()})
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[10px] block">Tinta Estimada:</span>
-                  <strong className="text-blue-900 text-xs">
-                    ~{printEstimatedInk} ml
-                  </strong>
-                </div>
-              </div>
+              {(() => {
+                const targetStock = getPaperStock(isPhotoService ? 'foto' : serviceType === 'print_opalina' ? 'opalina' : paperType, serviceType);
+                const hasStockInfo = targetStock !== null && targetStock !== undefined;
+                const isOutOfStock = hasStockInfo && targetStock <= 0;
+                const isLowStock = hasStockInfo && targetStock > 0 && targetStock <= 5;
+
+                return (
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-2 text-xs p-2.5 bg-blue-50/70 border border-blue-100 rounded-2xl">
+                      <div>
+                        <span className="text-slate-500 text-[10px] block">Hojas a Descontar:</span>
+                        <strong className="text-slate-900 text-xs">
+                          {printSheetsUsed} hoja{printSheetsUsed > 1 ? 's' : ''} ({isPhotoService ? 'FOTOGRÁFICO' : serviceType === 'print_opalina' ? 'OPALINA' : paperType.toUpperCase()})
+                        </strong>
+                        {hasStockInfo && (
+                          <span className={`text-[10px] font-bold block mt-0.5 ${
+                            isOutOfStock ? 'text-rose-600' : isLowStock ? 'text-amber-600' : 'text-emerald-700'
+                          }`}>
+                            Stock actual: {targetStock} hojas
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-slate-500 text-[10px] block">Tinta Estimada:</span>
+                        <strong className="text-blue-900 text-xs">
+                          ~{printEstimatedInk} ml
+                        </strong>
+                      </div>
+                    </div>
+
+                    {isOutOfStock && (
+                      <div className="p-2 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-1.5 text-xs text-rose-700 font-medium">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                        <span>Aviso: El papel seleccionado está en <strong>0 hojas en inventario</strong>.</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
 
@@ -790,20 +850,44 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
               </div>
 
               {/* Insumos deducidos */}
-              <div className="grid grid-cols-2 gap-2 text-xs p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-2xl">
-                <div>
-                  <span className="text-amber-800/80 text-[10px] block font-medium">Hojas Adhesivas a Rebajar:</span>
-                  <strong className="text-amber-950 text-xs font-extrabold">
-                    {stickerSheetsUsed} hoja{stickerSheetsUsed > 1 ? 's' : ''} (Adhesivo Carta)
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-amber-800/80 text-[10px] block font-medium">Costo Insumos (Papel+Tinta):</span>
-                  <strong className="text-amber-950 text-xs font-extrabold">
-                    {formatCurrency(stickerSheetsUsed * 4.66)}
-                  </strong>
-                </div>
-              </div>
+              {(() => {
+                const targetStock = getPaperStock('adhesivo', 'sticker_custom');
+                const hasStockInfo = targetStock !== null && targetStock !== undefined;
+                const isOutOfStock = hasStockInfo && targetStock <= 0;
+
+                return (
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-2 text-xs p-2.5 bg-amber-50/80 border border-amber-200/70 rounded-2xl">
+                      <div>
+                        <span className="text-amber-800/80 text-[10px] block font-medium">Hojas Adhesivas a Rebajar:</span>
+                        <strong className="text-amber-950 text-xs font-extrabold">
+                          {stickerSheetsUsed} hoja{stickerSheetsUsed > 1 ? 's' : ''} (Adhesivo Carta)
+                        </strong>
+                        {hasStockInfo && (
+                          <span className={`text-[10px] font-bold block mt-0.5 ${
+                            isOutOfStock ? 'text-rose-600' : 'text-amber-900'
+                          }`}>
+                            Stock actual: {targetStock} hojas
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-amber-800/80 text-[10px] block font-medium">Costo Insumos (Papel+Tinta):</span>
+                        <strong className="text-amber-950 text-xs font-extrabold">
+                          {formatCurrency(stickerSheetsUsed * 4.66)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {isOutOfStock && (
+                      <div className="p-2 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-1.5 text-xs text-rose-700 font-medium">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                        <span>Aviso: Papel Adhesivo / Sticker en <strong>0 hojas en inventario</strong>.</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
 
@@ -839,9 +923,22 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
 
                 {/* Tipo de Papel / Material a descontar */}
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                    Material / Papel Utilizado:
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block">
+                      Material / Papel Utilizado:
+                    </label>
+                    {(() => {
+                      const stock = getPaperStock(directMaterial, 'print_direct');
+                      if (stock === null || stock === undefined) return null;
+                      return (
+                        <span className={`text-[10px] font-bold ${
+                          stock <= 0 ? 'text-rose-600' : stock <= 5 ? 'text-amber-600' : 'text-emerald-700'
+                        }`}>
+                          Stock: {stock} hojas
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
                       { id: 'adhesivo', label: '🏷️ Adhesivo' },
@@ -851,6 +948,7 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
                       { id: 'legal', label: '📑 Bond Legal' }
                     ].map((m) => {
                       const isSelected = directMaterial === m.id;
+                      const matStock = getPaperStock(m.id, 'print_direct');
                       return (
                         <button
                           key={m.id}
@@ -862,7 +960,14 @@ export const PrintCalculatorModal = ({ isOpen, onClose, onAddPrintToCart }) => {
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
                           }`}
                         >
-                          {m.label}
+                          <div>{m.label}</div>
+                          {matStock !== null && matStock !== undefined && (
+                            <div className={`text-[9px] mt-0.5 ${
+                              isSelected ? 'text-emerald-100' : matStock <= 0 ? 'text-rose-500 font-bold' : 'text-slate-400'
+                            }`}>
+                              {matStock} disp.
+                            </div>
+                          )}
                         </button>
                       );
                     })}

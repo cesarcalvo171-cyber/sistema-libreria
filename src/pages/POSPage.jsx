@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search,
   ShoppingCart,
@@ -13,7 +14,8 @@ import {
   Printer,
   X,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Wallet
 } from 'lucide-react';
 import { productsService } from '../services/productsService';
 import { salesService } from '../services/salesService';
@@ -225,8 +227,18 @@ export const POSPage = () => {
             className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-2xl text-sm shadow-md shadow-blue-900/20 active:scale-98 transition shrink-0 border border-blue-800"
           >
             <Printer className="w-5 h-5 text-cyan-300" />
-            <span>🖨️ Cobrar Impresión / Copia</span>
+            <span>🖨️ Cobrar Impresión</span>
           </button>
+
+          {/* Botón Acceso Rápido: Caja / Retiros */}
+          <Link
+            to="/caja"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-2xl text-xs sm:text-sm shadow-md shadow-emerald-700/20 active:scale-98 transition shrink-0 border border-emerald-600"
+            title="Ver efectivo en caja y registrar salidas/gastos"
+          >
+            <Wallet className="w-4 h-4 text-emerald-200" />
+            <span>💵 Caja</span>
+          </Link>
 
           {/* Buscador de Productos */}
           <div className="relative flex-1">

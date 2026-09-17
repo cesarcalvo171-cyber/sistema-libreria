@@ -6,11 +6,13 @@ import {
   Package,
   TrendingUp,
   Receipt,
-  History
+  History,
+  Wallet
 } from 'lucide-react';
 
 const mobileNavItems = [
   { name: 'POS', path: '/', icon: ShoppingCart },
+  { name: 'Caja', path: '/caja', icon: Wallet },
   { name: 'Impresión', path: '/impresiones', icon: Printer },
   { name: 'Stock', path: '/inventario', icon: Package },
   { name: 'Finanzas', path: '/finanzas', icon: TrendingUp },
@@ -21,7 +23,7 @@ const mobileNavItems = [
 export const BottomNav = () => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] md:hidden">
-      <div className="grid grid-cols-6 h-16 max-w-lg mx-auto">
+      <div className="grid grid-cols-7 h-16 max-w-lg mx-auto">
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
           return (

@@ -8,7 +8,8 @@ import {
   Receipt,
   History,
   Store,
-  Database
+  Database,
+  Wallet
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../lib/supabase';
 
@@ -18,6 +19,12 @@ const navItems = [
     path: '/',
     icon: ShoppingCart,
     badge: 'Módulo 1'
+  },
+  {
+    name: 'Caja & Retiros',
+    path: '/caja',
+    icon: Wallet,
+    badge: 'Control'
   },
   {
     name: 'Impresiones & Insumos',
