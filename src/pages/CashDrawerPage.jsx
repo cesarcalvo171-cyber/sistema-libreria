@@ -20,12 +20,12 @@ import {
 } from 'lucide-react';
 import { cashService } from '../services/cashService';
 import { salesService } from '../services/salesService';
-import { formatCurrency, formatDate, formatDateTime, getMonthName } from '../lib/formatters';
+import { formatCurrency, formatDate, formatDateTime, getMonthName, getLocalDateString } from '../lib/formatters';
 import { toast } from 'sonner';
 
 export const CashDrawerPage = () => {
+  const todayStr = getLocalDateString();
   const currentDate = new Date();
-  const todayStr = currentDate.toISOString().split('T')[0];
 
   const [filterMode, setFilterMode] = useState('today'); // 'today', 'month'
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -60,16 +60,17 @@ export const CashDrawerPage = () => {
       setWithdrawals(allRecords);
 
       // 2. Cargar ventas del día seleccionado o del mes
-      const sales = await salesService.getAll({
-        month: filterMode === 'month' ? selectedMonth : null,
-        year: filterMode === 'month' ? selectedYear : null
-      });
+      const sales = await salesService.getAll();
 
       const targetSales = (sales || []).filter(s => {
         if (s.status !== 'completed') return false;
-        const sDate = (s.created_at || '').split('T')[0];
+        const sDate = getLocalDateString(s.created_at);
         if (filterMode === 'today') {
           return sDate === selectedDate;
+        }
+        if (filterMode === 'month') {
+          const sObj = new Date(s.created_at);
+          return sObj.getMonth() === selectedMonth && sObj.getFullYear() === selectedYear;
         }
         return true;
       });

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getLocalDateString } from '../lib/formatters';
 
 const LOCAL_STORAGE_KEY = 'POS_CASH_MOVEMENTS';
 
@@ -14,8 +15,9 @@ export const cashService = {
       if (date) {
         query = query.eq('expense_date', date);
       } else if (month !== null && year !== null) {
-        const start = new Date(year, month, 1).toISOString().split('T')[0];
-        const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         query = query.gte('expense_date', start).lte('expense_date', end);
       }
 
@@ -44,7 +46,7 @@ export const cashService = {
 
   // Registrar un retiro de caja / gasto operativo
   async createWithdrawal({ description, amount, expense_date = null, category = 'Retiro / Caja Chica' }) {
-    const dateStr = expense_date || new Date().toISOString().split('T')[0];
+    const dateStr = expense_date || getLocalDateString();
     const { data, error } = await supabase
       .from('expenses')
       .insert([

@@ -39,3 +39,15 @@ export const getMonthName = (monthNumber) => {
   ];
   return months[monthNumber] || '';
 };
+
+// Obtener fecha en formato local YYYY-MM-DD (evitando desfase UTC)
+export const getLocalDateString = (d = new Date()) => {
+  if (!d) return '';
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return '';
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
